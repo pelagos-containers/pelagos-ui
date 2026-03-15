@@ -1,0 +1,25 @@
+/**
+ * Typed wrappers around Tauri's invoke().
+ * The frontend calls these instead of invoke() directly.
+ */
+import { invoke } from '@tauri-apps/api/core';
+
+export interface ContainerInfo {
+  name:        string;
+  status:      'running' | 'exited';
+  pid:         number;
+  started_at:  string;   // ISO 8601
+  rootfs:      string;
+  command:     string[];
+  image?:      string;
+  exit_code?:  number;
+  health?:     'starting' | 'healthy' | 'unhealthy' | 'none';
+  bridge_ip?:  string;
+  network_ips?: Record<string, string>;
+  labels?:     Record<string, string>;
+}
+
+export const listContainers  = ()                              => invoke<ContainerInfo[]>('list_containers');
+export const stopContainer   = (name: string)                  => invoke<void>('stop_container',   { name });
+export const removeContainer = (name: string, force: boolean)  => invoke<void>('remove_container', { name, force });
+export const ping            = ()                              => invoke<boolean>('ping');

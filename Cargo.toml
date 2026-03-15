@@ -1,5 +1,6 @@
 [workspace]
 members = [
     "crates/pelagos-protocol",
+    "src-tauri",
 ]
 resolver = "2"

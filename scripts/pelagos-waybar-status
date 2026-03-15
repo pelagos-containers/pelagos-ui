@@ -1,0 +1,61 @@
+#!/usr/bin/env bash
+# Waybar custom module for pelagos container status.
+#
+# Outputs one JSON line consumed by Waybar's "return-type": "json":
+#   {"text":"N ▶","tooltip":"name  image\n...","class":"running"}
+#   {"text":"idle","tooltip":"No containers running","class":"idle"}
+#   {"text":"!","tooltip":"pelagos not found in PATH","class":"error"}
+#
+# ~/.config/waybar/config snippet:
+#   "custom/pelagos": {
+#       "exec":        "~/.local/bin/pelagos-waybar-status",
+#       "interval":    5,
+#       "on-click":    "pelagos-ui",
+#       "format":      "󰡨 {}",
+#       "return-type": "json",
+#       "tooltip":     true
+#   }
+#
+# ~/.config/waybar/style.css snippet:
+#   #custom-pelagos.running { color: #86efac; }
+#   #custom-pelagos.idle    { color: #6b7280; }
+#   #custom-pelagos.error   { color: #f87171; }
+#
+# Install:
+#   cp scripts/pelagos-waybar-status ~/.local/bin/
+#   chmod +x ~/.local/bin/pelagos-waybar-status
+
+set -euo pipefail
+
+if ! command -v pelagos &>/dev/null; then
+    printf '{"text":"!","tooltip":"pelagos not found in PATH","class":"error"}\n'
+    exit 0
+fi
+
+# Capture ps output; treat non-zero exit as empty list (no state dir yet, etc).
+json=$(pelagos ps --all --format json 2>/dev/null || echo '[]')
+
+# Count running containers and build tooltip using only Python stdlib.
+read -r running tooltip_json < <(python3 - <<'PYEOF'
+import json, sys
+
+data = json.loads(sys.stdin.read())
+running = [c for c in data if c.get("status") == "running"]
+
+count = len(running)
+lines = []
+for c in running:
+    name  = c.get("name", "?")
+    image = c.get("image") or c.get("rootfs", "?")
+    lines.append(f"{name}  {image}")
+
+tooltip = json.dumps("\n".join(lines) if lines else "No containers running")
+print(count, tooltip)
+PYEOF
+<<< "$json")
+
+if [ "$running" -eq 0 ]; then
+    printf '{"text":"idle","tooltip":"No containers running","class":"idle"}\n'
+else
+    printf '{"text":"%d ▶","tooltip":%s,"class":"running"}\n' "$running" "$tooltip_json"
+fi
