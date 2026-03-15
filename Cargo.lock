@@ -2320,6 +2320,7 @@ dependencies = [
  "async-trait",
  "dirs 5.0.1",
  "env_logger",
+ "gtk",
  "log",
  "pelagos-protocol",
  "serde",
