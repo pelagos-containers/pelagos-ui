@@ -4,7 +4,7 @@
   import { listImages, pullImage, removeImage } from '$lib/ipc';
   import type { ImageInfo } from '$lib/ipc';
 
-  const dispatch = createEventDispatcher<{ close: void }>();
+  const dispatch = createEventDispatcher<{ close: void; run: string }>();
 
   let images: ImageInfo[] = [];
   let loadError = '';
@@ -144,6 +144,7 @@
             <td class="mono">{shortDigest(img.digest)}</td>
             <td class="center">{img.layers.length}</td>
             <td class="actions">
+              <button class="btn-sm" on:click={() => dispatch('run', img.reference)}>▶ Run</button>
               <button class="btn-sm danger" on:click={() => confirmRemove(img.reference)}>Remove</button>
             </td>
           </tr>

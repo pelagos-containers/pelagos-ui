@@ -4,7 +4,9 @@
 
   const dispatch = createEventDispatcher<{ done: void }>();
 
-  let image = '';
+  export let prefillImage = '';
+
+  let image = prefillImage;
   let nameInput = '';
   let cmdInput = '';
   let mode: 'background' | 'interactive' = 'background';
