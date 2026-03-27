@@ -1,8 +1,11 @@
 //! Launch interactive container sessions in a new terminal window.
 //!
-//! Ported from pelagos-tui's open_in_terminal logic.
-//! Terminal is detected via $PELAGOS_TERMINAL override or $TERM_PROGRAM,
-//! falling back to Apple Terminal on macOS / xterm on Linux.
+//! macOS default: write a self-deleting `.command` file and `open` it.
+//! `.command` files are opened by Terminal.app without requiring the
+//! Automation permission that `osascript "do script"` demands.
+//!
+//! iTerm / ghostty / kitty / alacritty: detected via $TERM_PROGRAM or
+//! $PELAGOS_TERMINAL override; launched via their own CLI flags.
 
 /// Build and launch `pelagos run --tty --interactive [--name N] image [args]`
 /// in a new terminal window.
@@ -24,6 +27,7 @@ pub fn open_in_terminal(image: &str, name: Option<&str>, args: &[String]) -> Res
     }
     let cmd = parts.join(" ");
 
+    // $PELAGOS_TERMINAL overrides everything.
     if let Ok(term_bin) = std::env::var("PELAGOS_TERMINAL") {
         return spawn_generic(&term_bin, &cmd);
     }
@@ -36,14 +40,14 @@ pub fn open_in_terminal(image: &str, name: Option<&str>, args: &[String]) -> Res
             "ghostty" => spawn_generic("ghostty", &cmd),
             "kitty" => spawn_generic("kitty", &cmd),
             "alacritty" => spawn_generic("alacritty", &cmd),
-            // Apple_Terminal, WarpTerminal, unknown → AppleScript Terminal
-            _ => osascript_apple_terminal(&cmd),
+            // Apple Terminal, Warp, unknown: use .command file — no
+            // Automation permission needed, works in any sandbox level.
+            _ => open_command_file(&cmd),
         }
     }
 
     #[cfg(not(target_os = "macos"))]
     {
-        // Linux: try common terminals in order.
         for term in &[
             "x-terminal-emulator",
             "gnome-terminal",
@@ -58,29 +62,28 @@ pub fn open_in_terminal(image: &str, name: Option<&str>, args: &[String]) -> Res
     }
 }
 
-/// Locate the `pelagos` host binary (same logic as lib.rs find_pelagos_bin).
-fn find_pelagos_bin() -> String {
-    for candidate in &["/opt/homebrew/bin/pelagos", "/usr/local/bin/pelagos"] {
-        if std::path::Path::new(candidate).exists() {
-            return candidate.to_string();
-        }
-    }
-    which::which("pelagos")
-        .map(|p| p.to_string_lossy().into_owned())
-        .unwrap_or_else(|_| "pelagos".into())
-}
-
+/// Write a self-deleting `.command` file to /tmp and open it.
+///
+/// macOS associates `.command` files with Terminal.app; `open` launches them
+/// without requiring the Automation entitlement that `osascript` needs.
+/// The script removes itself on startup so /tmp stays tidy.
 #[cfg(target_os = "macos")]
-fn osascript_apple_terminal(cmd: &str) -> Result<(), String> {
-    let script = format!(
-        "tell application \"Terminal\" to do script \"{}\"",
-        escape_applescript(cmd)
-    );
-    std::process::Command::new("osascript")
-        .args(["-e", &script])
-        .stdin(std::process::Stdio::null())
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
+fn open_command_file(cmd: &str) -> Result<(), String> {
+    use std::io::Write;
+    use std::os::unix::fs::PermissionsExt;
+
+    let path = std::env::temp_dir().join(format!("pelagos-run-{}.command", std::process::id()));
+    let mut f = std::fs::File::create(&path).map_err(|e| e.to_string())?;
+    // Self-delete then exec the pelagos command so the terminal inherits it cleanly.
+    writeln!(f, "#!/bin/bash").map_err(|e| e.to_string())?;
+    writeln!(f, "rm -- \"$0\"").map_err(|e| e.to_string())?;
+    writeln!(f, "exec {}", cmd).map_err(|e| e.to_string())?;
+    drop(f);
+    std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755))
+        .map_err(|e| e.to_string())?;
+
+    std::process::Command::new("open")
+        .arg(&path)
         .spawn()
         .map(|_| ())
         .map_err(|e| e.to_string())
@@ -94,9 +97,6 @@ fn osascript_iterm(cmd: &str) -> Result<(), String> {
     );
     std::process::Command::new("osascript")
         .args(["-e", &script])
-        .stdin(std::process::Stdio::null())
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
         .spawn()
         .map(|_| ())
         .map_err(|e| e.to_string())
@@ -111,6 +111,18 @@ fn spawn_generic(term_bin: &str, cmd: &str) -> Result<(), String> {
         .spawn()
         .map(|_| ())
         .map_err(|e| e.to_string())
+}
+
+/// Locate the `pelagos` host binary.
+fn find_pelagos_bin() -> String {
+    for candidate in &["/opt/homebrew/bin/pelagos", "/usr/local/bin/pelagos"] {
+        if std::path::Path::new(candidate).exists() {
+            return candidate.to_string();
+        }
+    }
+    which::which("pelagos")
+        .map(|p| p.to_string_lossy().into_owned())
+        .unwrap_or_else(|_| "pelagos".into())
 }
 
 #[cfg(target_os = "macos")]
