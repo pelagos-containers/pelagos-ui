@@ -23,5 +23,5 @@ export const listContainers  = ()                              => invoke<Contain
 export const stopContainer   = (name: string)                  => invoke<void>('stop_container',   { name });
 export const removeContainer = (name: string, force: boolean)  => invoke<void>('remove_container', { name, force });
 export const ping            = ()                              => invoke<boolean>('ping');
-export const runContainer    = (image: string, name: string | null, args: string[], detach: boolean) =>
-  invoke<number>('run_container', { image, name, args, detach });
+export const runContainer    = (image: string, name: string | null, args: string[]) =>
+  invoke<number>('run_container', { image, name, args, detach: true });
