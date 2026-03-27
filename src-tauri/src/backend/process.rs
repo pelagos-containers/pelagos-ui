@@ -39,7 +39,7 @@ impl ProcessBackend {
             .map_err(BackendError::Io)?;
         let stdout = String::from_utf8_lossy(&out.stdout).into_owned();
         let stderr = String::from_utf8_lossy(&out.stderr).into_owned();
-        let code   = out.status.code().unwrap_or(-1);
+        let code = out.status.code().unwrap_or(-1);
         Ok((stdout, stderr, code))
     }
 }
@@ -65,7 +65,9 @@ impl RuntimeBackend for ProcessBackend {
 
     async fn remove_container(&self, name: &str, force: bool) -> Result<(), BackendError> {
         let mut args = vec!["rm"];
-        if force { args.push("--force"); }
+        if force {
+            args.push("--force");
+        }
         args.push(name);
         let (_, stderr, code) = self.run(&args).await?;
         if code != 0 {
@@ -75,7 +77,8 @@ impl RuntimeBackend for ProcessBackend {
     }
 
     async fn ping(&self) -> bool {
-        self.run(&["--version"]).await
+        self.run(&["--version"])
+            .await
             .map(|(_, _, c)| c == 0)
             .unwrap_or(false)
     }

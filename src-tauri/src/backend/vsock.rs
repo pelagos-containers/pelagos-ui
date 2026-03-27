@@ -12,9 +12,7 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use super::{BackendError, RuntimeBackend};
-use pelagos_protocol::{
-    response::StreamKind, ContainerInfo, GuestCommand, GuestResponse,
-};
+use pelagos_protocol::{response::StreamKind, ContainerInfo, GuestCommand, GuestResponse};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::UnixStream;
 use tokio::time::timeout;
@@ -32,7 +30,9 @@ pub struct VsockBackend {
 
 impl VsockBackend {
     pub fn new(socket_path: impl AsRef<Path>) -> Self {
-        Self { socket_path: socket_path.as_ref().to_owned() }
+        Self {
+            socket_path: socket_path.as_ref().to_owned(),
+        }
     }
 
     pub fn with_default_path() -> Self {
@@ -55,16 +55,24 @@ impl VsockBackend {
 
         let mut line = serde_json::to_string(cmd).map_err(BackendError::ParseError)?;
         line.push('\n');
-        writer.write_all(line.as_bytes()).await.map_err(BackendError::Io)?;
+        writer
+            .write_all(line.as_bytes())
+            .await
+            .map_err(BackendError::Io)?;
 
         let mut stdout = String::new();
         let mut buf = String::new();
         loop {
             buf.clear();
             let n = reader.read_line(&mut buf).await.map_err(BackendError::Io)?;
-            if n == 0 { break; }
+            if n == 0 {
+                break;
+            }
             match serde_json::from_str::<GuestResponse>(buf.trim()) {
-                Ok(GuestResponse::Stream { stream: StreamKind::Stdout, data }) => {
+                Ok(GuestResponse::Stream {
+                    stream: StreamKind::Stdout,
+                    data,
+                }) => {
                     stdout.push_str(&data);
                 }
                 Ok(GuestResponse::Exit { .. }) | Ok(GuestResponse::Pong { .. }) => break,
@@ -87,18 +95,27 @@ impl RuntimeBackend for VsockBackend {
         //   let cmd = GuestCommand::Ps { all: true, json: true };
         //   let stdout = self.roundtrip(&cmd).await?;
         //   Ok(serde_json::from_str(&stdout)?)
-        log::warn!("list_containers: structured JSON not yet available over vsock \
-                    (waiting for pelagos-mac#98)");
+        log::warn!(
+            "list_containers: structured JSON not yet available over vsock \
+                    (waiting for pelagos-mac#98)"
+        );
         Ok(vec![])
     }
 
     async fn stop_container(&self, name: &str) -> Result<(), BackendError> {
-        self.roundtrip(&GuestCommand::Stop { name: name.to_string() }).await?;
+        self.roundtrip(&GuestCommand::Stop {
+            name: name.to_string(),
+        })
+        .await?;
         Ok(())
     }
 
     async fn remove_container(&self, name: &str, force: bool) -> Result<(), BackendError> {
-        self.roundtrip(&GuestCommand::Rm { name: name.to_string(), force }).await?;
+        self.roundtrip(&GuestCommand::Rm {
+            name: name.to_string(),
+            force,
+        })
+        .await?;
         Ok(())
     }
 

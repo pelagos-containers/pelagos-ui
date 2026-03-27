@@ -46,8 +46,6 @@ pub async fn remove_container(
 ///
 /// Frontend: `await invoke('ping')`
 #[tauri::command]
-pub async fn ping(
-    backend: State<'_, Arc<dyn RuntimeBackend>>,
-) -> Result<bool, BackendError> {
+pub async fn ping(backend: State<'_, Arc<dyn RuntimeBackend>>) -> Result<bool, BackendError> {
     Ok(backend.ping().await)
 }

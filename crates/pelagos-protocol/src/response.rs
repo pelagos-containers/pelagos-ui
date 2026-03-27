@@ -38,7 +38,6 @@ pub enum GuestResponse {
     // ------------------------------------------------------------------
     // Streaming output
     // ------------------------------------------------------------------
-
     /// A chunk of stdout or stderr from the running command.
     /// Data is UTF-8 text (not binary).  Lines may be split across chunks.
     Stream {
@@ -50,17 +49,12 @@ pub enum GuestResponse {
     // ------------------------------------------------------------------
     // Terminal responses (exactly one per command)
     // ------------------------------------------------------------------
-
     /// The command exited.  `exit` is the process exit code (0 = success).
     /// Always the final response for commands that spawn a process.
-    Exit {
-        exit: i32,
-    },
+    Exit { exit: i32 },
 
     /// Response to [`crate::command::GuestCommand::Ping`].
-    Pong {
-        pong: bool,
-    },
+    Pong { pong: bool },
 
     /// Response to [`crate::command::GuestCommand::Version`].
     VersionInfo {
@@ -74,33 +68,25 @@ pub enum GuestResponse {
     /// An error occurred before any output was produced.
     /// `error` is a human-readable message.  When this is emitted, no
     /// [`GuestResponse::Exit`] follows — `Error` is itself terminal.
-    Error {
-        error: String,
-    },
+    Error { error: String },
 
     // ------------------------------------------------------------------
     // Special: raw binary payload
     // ------------------------------------------------------------------
-
     /// Precedes a raw binary payload of `size` bytes written directly to the
     /// socket (no JSON framing).  After the raw bytes, the guest sends
     /// [`GuestResponse::Exit`].
     ///
     /// Used by `CpFrom`: the host should read exactly `size` bytes from the
     /// socket after receiving this line, then expect the `Exit` line.
-    RawBytes {
-        size: u64,
-    },
+    RawBytes { size: u64 },
 
     // ------------------------------------------------------------------
     // Readiness / informational
     // ------------------------------------------------------------------
-
     /// Emitted by the guest when it is ready to accept the next command on
     /// a multiplexed connection.  Hosts may ignore this.
-    Ready {
-        ready: bool,
-    },
+    Ready { ready: bool },
 }
 
 /// Which output stream a [`GuestResponse::Stream`] chunk came from.

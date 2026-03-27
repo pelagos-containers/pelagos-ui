@@ -33,7 +33,6 @@ pub enum GuestCommand {
     // ------------------------------------------------------------------
     // Lifecycle / meta
     // ------------------------------------------------------------------
-
     /// Health check.  Guest replies with [`crate::response::GuestResponse::Pong`].
     /// Round-trip latency should be < 5 ms over vsock.
     Ping,
@@ -46,7 +45,6 @@ pub enum GuestCommand {
     // ------------------------------------------------------------------
     // Container introspection (UI-primary)
     // ------------------------------------------------------------------
-
     /// List containers.  Maps to `pelagos ps [--all] [--format json]`.
     ///
     /// When `json` is `true`, the guest passes `--format json` to the pelagos
@@ -72,7 +70,6 @@ pub enum GuestCommand {
     // ------------------------------------------------------------------
     // Container lifecycle
     // ------------------------------------------------------------------
-
     /// Start a container from an image.  Maps to `pelagos run`.
     ///
     /// Guest replies with streamed stdout/stderr followed by
@@ -100,9 +97,7 @@ pub enum GuestCommand {
     /// Stop a running container by name.  Maps to `pelagos stop <name>`.
     ///
     /// Guest replies with [`crate::response::GuestResponse::Exit`].
-    Stop {
-        name: String,
-    },
+    Stop { name: String },
 
     /// Remove a container by name.  Maps to `pelagos rm [--force] <name>`.
     ///
@@ -117,7 +112,6 @@ pub enum GuestCommand {
     // ------------------------------------------------------------------
     // Exec / interactive
     // ------------------------------------------------------------------
-
     /// Run a command inside a running container (namespace join).
     /// Maps to `pelagos exec [--tty] <container> <args...>`.
     ExecInto {
@@ -135,7 +129,6 @@ pub enum GuestCommand {
     // ------------------------------------------------------------------
     // Logs
     // ------------------------------------------------------------------
-
     /// Stream container logs.  Maps to `pelagos logs [--follow] <name>`.
     ///
     /// When `follow` is `true`, the guest streams indefinitely until the host
@@ -149,7 +142,6 @@ pub enum GuestCommand {
     // ------------------------------------------------------------------
     // VM shell (debug / development)
     // ------------------------------------------------------------------
-
     /// Open a shell directly in the VM (no container, no namespaces).
     /// Not intended for production UI use.
     Shell {

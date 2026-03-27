@@ -4,6 +4,7 @@
 //! On macOS it connects to `pelagos-guest` inside the VM over vsock.
 //! The Svelte frontend and Tauri commands never know which is active.
 
+#[cfg(target_os = "linux")]
 pub mod process;
 
 #[cfg(target_os = "macos")]
@@ -14,8 +15,10 @@ use pelagos_protocol::ContainerInfo;
 /// Errors returned by backend operations.
 #[derive(Debug, thiserror::Error)]
 pub enum BackendError {
+    #[cfg(target_os = "linux")]
     #[error("pelagos binary not found in PATH")]
     BinaryNotFound,
+    #[cfg(target_os = "linux")]
     #[error("pelagos exited with status {code}: {stderr}")]
     CommandFailed { code: i32, stderr: String },
     #[error("failed to parse pelagos output: {0}")]
