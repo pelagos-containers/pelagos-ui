@@ -8,3 +8,9 @@ dist/
 .env.*
 !.env.example
 *.pem
+
+# Tauri icon generator output for non-macOS platforms
+src-tauri/icons/android/
+src-tauri/icons/ios/
+src-tauri/icons/Square*.png
+src-tauri/icons/StoreLogo.png
