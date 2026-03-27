@@ -25,6 +25,7 @@ pub enum BackendError {
     ParseError(#[from] serde_json::Error),
     #[error("I/O error: {0}")]
     Io(#[from] std::io::Error),
+    #[cfg(target_os = "macos")]
     #[error("{0}")]
     Other(String),
 }
