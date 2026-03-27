@@ -1,17 +1,16 @@
 <script lang="ts">
-  import { createEventDispatcher, onDestroy } from 'svelte';
-  import { runContainer } from '$lib/ipc';
+  import { createEventDispatcher } from 'svelte';
+  import { runContainer, launchInteractive } from '$lib/ipc';
 
   const dispatch = createEventDispatcher<{ done: void }>();
 
   let image = '';
   let nameInput = '';
   let cmdInput = '';
+  let mode: 'background' | 'interactive' = 'background';
 
   let running = false;
   let error = '';
-
-  onDestroy(() => {});
 
   async function run() {
     if (!image.trim()) return;
@@ -20,10 +19,14 @@
     try {
       const args = cmdInput.trim() ? cmdInput.trim().split(/\s+/) : [];
       const name = nameInput.trim() || null;
-      // Always detach — the UI is for launching background containers.
-      // Interactive / foreground sessions belong in a terminal.
-      await runContainer(image.trim(), name, args, true);
-      dispatch('done');
+      if (mode === 'interactive') {
+        await launchInteractive(image.trim(), name, args);
+        // Terminal window opened — close panel, container will appear once it starts
+        dispatch('done');
+      } else {
+        await runContainer(image.trim(), name, args);
+        dispatch('done');
+      }
     } catch (e) {
       error = String(e);
       running = false;
@@ -48,12 +51,28 @@
     />
     <input
       class="input wide"
-      placeholder="Command  (optional, e.g. sleep 60)"
+      placeholder={mode === 'interactive' ? 'Command  (e.g. /bin/sh)' : 'Command  (e.g. sleep 60)'}
       bind:value={cmdInput}
       disabled={running}
     />
+
+    <div class="seg" role="group">
+      <button
+        class="seg-btn"
+        class:active={mode === 'background'}
+        on:click={() => (mode = 'background')}
+        disabled={running}
+      >Background</button>
+      <button
+        class="seg-btn"
+        class:active={mode === 'interactive'}
+        on:click={() => (mode = 'interactive')}
+        disabled={running}
+      >Interactive</button>
+    </div>
+
     <button class="btn" on:click={run} disabled={running || !image.trim()}>
-      {running ? '…' : 'Run'}
+      {running ? '…' : mode === 'interactive' ? 'Open terminal' : 'Run'}
     </button>
     <button class="btn ghost" on:click={() => dispatch('done')} disabled={running}>✕</button>
   </div>
@@ -89,6 +108,27 @@
   .input.wide { flex: 1; min-width: 180px; }
   .input:focus { outline: none; border-color: #58a6ff; }
   .input:disabled { opacity: 0.5; }
+
+  .seg {
+    display: flex;
+    border: 1px solid #30363d;
+    border-radius: 4px;
+    overflow: hidden;
+  }
+  .seg-btn {
+    background: transparent;
+    border: none;
+    color: #8b949e;
+    cursor: pointer;
+    font-size: 0.75rem;
+    padding: 4px 10px;
+    white-space: nowrap;
+  }
+  .seg-btn + .seg-btn { border-left: 1px solid #30363d; }
+  .seg-btn.active { background: #21262d; color: #f0f0f0; }
+  .seg-btn:hover:not(:disabled):not(.active) { background: #161b22; color: #f0f0f0; }
+  .seg-btn:disabled { opacity: 0.5; cursor: default; }
+
   .btn {
     background: #238636;
     border: none;

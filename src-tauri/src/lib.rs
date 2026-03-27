@@ -1,5 +1,6 @@
 mod backend;
 mod commands;
+mod terminal;
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -26,6 +27,7 @@ pub fn run() {
             commands::ping,
             commands::vm_status,
             commands::run_container,
+            commands::launch_interactive,
         ])
         .setup(|app| {
             // Inject GTK CSS on Linux so the tray context menu has an opaque

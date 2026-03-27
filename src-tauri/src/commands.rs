@@ -68,6 +68,19 @@ pub async fn run_container(
         .await
 }
 
+/// Open a new terminal window running `pelagos run --tty --interactive image [cmd]`.
+/// Returns immediately — the terminal handles the session.
+///
+/// Frontend: `await invoke('launch_interactive', { image, name, args })`
+#[tauri::command]
+pub fn launch_interactive(
+    image: String,
+    name: Option<String>,
+    args: Vec<String>,
+) -> Result<(), String> {
+    crate::terminal::open_in_terminal(&image, name.as_deref(), &args)
+}
+
 /// Returns true if the runtime is reachable.
 ///
 /// Frontend: `await invoke('ping')`
