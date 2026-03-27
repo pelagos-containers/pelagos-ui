@@ -5,7 +5,9 @@
 
 use super::{BackendError, RuntimeBackend};
 use pelagos_protocol::ContainerInfo;
+use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::Command;
+use tokio::sync::mpsc::UnboundedSender;
 
 // Stable flag for JSON output.  Update to "--json" once pelagos#108 lands.
 const PS_JSON_ARGS: &[&str] = &["ps", "--all", "--format", "json"];
@@ -81,6 +83,53 @@ impl RuntimeBackend for ProcessBackend {
             .await
             .map(|(_, _, c)| c == 0)
             .unwrap_or(false)
+    }
+
+    async fn run_container(
+        &self,
+        image: &str,
+        name: Option<&str>,
+        args: Vec<String>,
+        detach: bool,
+        tx: UnboundedSender<String>,
+    ) -> Result<i32, BackendError> {
+        let bin = self.bin.as_ref().ok_or(BackendError::BinaryNotFound)?;
+        let mut cmd = Command::new(bin);
+        cmd.arg("run");
+        if let Some(n) = name {
+            cmd.arg("--name").arg(n);
+        }
+        if detach {
+            cmd.arg("--detach");
+        }
+        cmd.arg(image);
+        for a in &args {
+            cmd.arg(a);
+        }
+        cmd.stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped());
+
+        let mut child = cmd.spawn().map_err(BackendError::Io)?;
+        let stdout = child.stdout.take().unwrap();
+        let stderr = child.stderr.take().unwrap();
+
+        let tx2 = tx.clone();
+        let h1 = tokio::spawn(async move {
+            let mut lines = BufReader::new(stdout).lines();
+            while let Ok(Some(line)) = lines.next_line().await {
+                let _ = tx.send(line);
+            }
+        });
+        let h2 = tokio::spawn(async move {
+            let mut lines = BufReader::new(stderr).lines();
+            while let Ok(Some(line)) = lines.next_line().await {
+                let _ = tx2.send(line);
+            }
+        });
+
+        let _ = tokio::join!(h1, h2);
+        let status = child.wait().await.map_err(BackendError::Io)?;
+        Ok(status.code().unwrap_or(-1))
     }
 }
 

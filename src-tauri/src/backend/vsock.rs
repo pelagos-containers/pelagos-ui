@@ -12,6 +12,7 @@ use super::{BackendError, RuntimeBackend};
 use pelagos_protocol::{response::StreamKind, ContainerInfo, GuestCommand, GuestResponse};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::UnixStream;
+use tokio::sync::mpsc::UnboundedSender;
 use tokio::time::timeout;
 
 pub fn default_socket_path() -> PathBuf {
@@ -37,10 +38,9 @@ impl VsockBackend {
         Self::new(default_socket_path())
     }
 
-    /// Send one command over a fresh connection, collect all response lines
-    /// until a terminal variant, return accumulated stdout.
-    async fn roundtrip(&self, cmd: &GuestCommand) -> Result<String, BackendError> {
-        let stream = timeout(
+    /// Open a connection to the daemon socket.
+    async fn connect(&self) -> Result<UnixStream, BackendError> {
+        timeout(
             Duration::from_secs(5),
             UnixStream::connect(&self.socket_path),
         )
@@ -52,7 +52,12 @@ impl VsockBackend {
             } else {
                 BackendError::Io(e)
             }
-        })?;
+        })
+    }
+
+    /// Send one command, collect all stdout, return it.
+    async fn roundtrip(&self, cmd: &GuestCommand) -> Result<String, BackendError> {
+        let stream = self.connect().await?;
 
         let (reader, mut writer) = stream.into_split();
         let mut reader = BufReader::new(reader);
@@ -121,5 +126,61 @@ impl RuntimeBackend for VsockBackend {
 
     async fn ping(&self) -> bool {
         self.roundtrip(&GuestCommand::Ping).await.is_ok()
+    }
+
+    async fn run_container(
+        &self,
+        image: &str,
+        name: Option<&str>,
+        args: Vec<String>,
+        detach: bool,
+        tx: UnboundedSender<String>,
+    ) -> Result<i32, BackendError> {
+        let cmd = GuestCommand::Run {
+            image: image.to_string(),
+            args,
+            name: name.map(str::to_string),
+            detach,
+            env: Default::default(),
+            mounts: vec![],
+        };
+
+        let stream = self.connect().await?;
+        let (reader, mut writer) = stream.into_split();
+        let mut reader = BufReader::new(reader);
+
+        let mut line = serde_json::to_string(&cmd).map_err(BackendError::ParseError)?;
+        line.push('\n');
+        writer
+            .write_all(line.as_bytes())
+            .await
+            .map_err(BackendError::Io)?;
+
+        let mut buf = String::new();
+        let mut exit_code = 0;
+        loop {
+            buf.clear();
+            let n = reader.read_line(&mut buf).await.map_err(BackendError::Io)?;
+            if n == 0 {
+                break;
+            }
+            match serde_json::from_str::<GuestResponse>(buf.trim()) {
+                Ok(GuestResponse::Stream { data, .. }) => {
+                    for line in data.lines() {
+                        let _ = tx.send(line.to_string());
+                    }
+                }
+                Ok(GuestResponse::Exit { exit }) => {
+                    exit_code = exit;
+                    break;
+                }
+                Ok(GuestResponse::Error { error }) => {
+                    return Err(BackendError::Other(error));
+                }
+                Ok(_) => {}
+                Err(e) => log::warn!("unparseable guest response: {e}: {}", buf.trim()),
+            }
+        }
+        Ok(exit_code)
     }
 }

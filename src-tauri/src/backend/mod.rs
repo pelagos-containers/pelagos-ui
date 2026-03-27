@@ -11,6 +11,7 @@ pub mod process;
 pub mod vsock;
 
 use pelagos_protocol::ContainerInfo;
+use tokio::sync::mpsc::UnboundedSender;
 
 /// Errors returned by backend operations.
 #[derive(Debug, thiserror::Error)]
@@ -56,4 +57,16 @@ pub trait RuntimeBackend: Send + Sync + 'static {
     /// Linux: pelagos binary responds to --version.
     /// macOS: guest daemon responds to ping over vsock.
     async fn ping(&self) -> bool;
+
+    /// Start a container from `image`.  Each line of stdout/stderr is sent to
+    /// `tx` as it arrives.  Returns the container process exit code (0 = success,
+    /// or the container name when `detach` is true and the guest prints it).
+    async fn run_container(
+        &self,
+        image: &str,
+        name: Option<&str>,
+        args: Vec<String>,
+        detach: bool,
+        tx: UnboundedSender<String>,
+    ) -> Result<i32, BackendError>;
 }
