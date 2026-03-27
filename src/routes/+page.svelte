@@ -30,7 +30,7 @@
   <header>
     <h1>pelagos</h1>
     {#if $loading}<span class="hint">loading…</span>{/if}
-    {#if $error}<span class="err">{$error}</span>{/if}
+    {#if $error}<span class={$error === 'VM stopped' ? 'hint' : 'err'}>{$error}</span>{/if}
   </header>
 
   {#if !$loading && $containers.length === 0}

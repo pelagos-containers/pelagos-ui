@@ -165,10 +165,7 @@ fn show_main_window(app: &tauri::AppHandle) {
 #[cfg(target_os = "macos")]
 fn find_pelagos_bin() -> Option<std::path::PathBuf> {
     // Homebrew on Apple Silicon and Intel respectively.
-    for candidate in &[
-        "/opt/homebrew/bin/pelagos",
-        "/usr/local/bin/pelagos",
-    ] {
+    for candidate in &["/opt/homebrew/bin/pelagos", "/usr/local/bin/pelagos"] {
         let p = std::path::Path::new(candidate);
         if p.exists() {
             return Some(p.to_owned());
