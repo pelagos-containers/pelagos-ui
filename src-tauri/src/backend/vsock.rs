@@ -90,16 +90,12 @@ impl VsockBackend {
 #[async_trait::async_trait]
 impl RuntimeBackend for VsockBackend {
     async fn list_containers(&self) -> Result<Vec<ContainerInfo>, BackendError> {
-        // TODO: blocked on pelagos-mac#98.
-        // Once merged, replace with:
-        //   let cmd = GuestCommand::Ps { all: true, json: true };
-        //   let stdout = self.roundtrip(&cmd).await?;
-        //   Ok(serde_json::from_str(&stdout)?)
-        log::warn!(
-            "list_containers: structured JSON not yet available over vsock \
-                    (waiting for pelagos-mac#98)"
-        );
-        Ok(vec![])
+        let cmd = GuestCommand::Ps {
+            all: true,
+            json: true,
+        };
+        let stdout = self.roundtrip(&cmd).await?;
+        Ok(serde_json::from_str(&stdout)?)
     }
 
     async fn stop_container(&self, name: &str) -> Result<(), BackendError> {
