@@ -37,27 +37,34 @@ pub fn run() {
             let sep = PredefinedMenuItem::separator(app)?;
             let quit = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
 
+            // On macOS, add VM start/stop items.  Initial state: Start enabled, Stop
+            // disabled (the polling loop corrects this on its first tick).
+            #[cfg(target_os = "macos")]
+            let vm_start = MenuItem::with_id(app, "start-vm", "Start VM", true, None::<&str>)?;
+            #[cfg(target_os = "macos")]
+            let vm_stop = MenuItem::with_id(app, "stop-vm", "Stop VM", false, None::<&str>)?;
+
             #[cfg(target_os = "macos")]
             let menu = {
-                let start_vm = MenuItem::with_id(app, "start-vm", "Start VM", true, None::<&str>)?;
-                let stop_vm = MenuItem::with_id(app, "stop-vm", "Stop VM", true, None::<&str>)?;
                 let sep2 = PredefinedMenuItem::separator(app)?;
-                Menu::with_items(app, &[&open, &sep, &start_vm, &stop_vm, &sep2, &quit])?
+                Menu::with_items(app, &[&open, &sep, &vm_start, &vm_stop, &sep2, &quit])?
             };
 
             #[cfg(not(target_os = "macos"))]
             let menu = Menu::with_items(app, &[&open, &sep, &quit])?;
 
             TrayIconBuilder::with_id("main-tray")
+                // Template image: macOS colours the icon for light/dark mode automatically.
+                .icon_as_template(true)
                 .icon(tauri::image::Image::from_bytes(ICON_RUNNING)?)
                 .menu(&menu)
                 .on_menu_event(|app, event| match event.id.as_ref() {
                     "open" => show_main_window(app),
                     "quit" => app.exit(0),
                     #[cfg(target_os = "macos")]
-                    "start-vm" => spawn_vm_cmd(app, "start"),
+                    "start-vm" => spawn_vm_cmd("start"),
                     #[cfg(target_os = "macos")]
-                    "stop-vm" => spawn_vm_cmd(app, "stop"),
+                    "stop-vm" => spawn_vm_cmd("stop"),
                     _ => {}
                 })
                 .on_tray_icon_event(|tray: &tauri::tray::TrayIcon<_>, event| {
@@ -72,21 +79,37 @@ pub fn run() {
                 })
                 .build(app)?;
 
-            // Background task: poll VM reachability and update tray icon.
+            // Clone item handles for the background polling task (macOS only).
+            #[cfg(target_os = "macos")]
+            let (vm_start_task, vm_stop_task) = (vm_start.clone(), vm_stop.clone());
+
             let backend = app
                 .state::<Arc<dyn backend::RuntimeBackend>>()
                 .inner()
                 .clone();
             let app_handle = app.handle().clone();
+
             tauri::async_runtime::spawn(async move {
                 loop {
                     let running = backend.ping().await;
+
                     if let Some(tray) = app_handle.tray_by_id("main-tray") {
                         let bytes = if running { ICON_RUNNING } else { ICON_STOPPED };
                         if let Ok(icon) = tauri::image::Image::from_bytes(bytes) {
                             let _ = tray.set_icon(Some(icon));
+                            // Re-assert template mode after each icon swap — macOS
+                            // may reset the flag when the image object is replaced.
+                            let _ = tray.set_icon_as_template(true);
                         }
                     }
+
+                    // Enable the applicable action; disable the inapplicable one.
+                    #[cfg(target_os = "macos")]
+                    {
+                        let _ = vm_start_task.set_enabled(!running);
+                        let _ = vm_stop_task.set_enabled(running);
+                    }
+
                     tokio::time::sleep(Duration::from_secs(5)).await;
                 }
             });
@@ -137,8 +160,7 @@ fn show_main_window(app: &tauri::AppHandle) {
 
 /// Spawn `pelagos-mac vm <sub>` (start or stop) in the background.
 #[cfg(target_os = "macos")]
-fn spawn_vm_cmd(app: &tauri::AppHandle, sub: &'static str) {
-    let _ = app; // app_handle not needed; pelagos-mac is self-contained
+fn spawn_vm_cmd(sub: &'static str) {
     tauri::async_runtime::spawn(async move {
         match tokio::process::Command::new("pelagos-mac")
             .args(["vm", sub])
