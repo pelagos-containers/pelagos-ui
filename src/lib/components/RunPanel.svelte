@@ -4,7 +4,9 @@
 
   const dispatch = createEventDispatcher<{ done: void }>();
 
-  let image = '';
+  export let prefillImage = '';
+
+  let image = prefillImage;
   let nameInput = '';
   let cmdInput = '';
   let mode: 'background' | 'interactive' = 'background';
@@ -60,13 +62,13 @@
       <button
         class="seg-btn"
         class:active={mode === 'background'}
-        on:click={() => (mode = 'background')}
+        on:click={() => { if (cmdInput === '/bin/sh') cmdInput = ''; mode = 'background'; }}
         disabled={running}
       >Background</button>
       <button
         class="seg-btn"
         class:active={mode === 'interactive'}
-        on:click={() => (mode = 'interactive')}
+        on:click={() => { if (!cmdInput.trim()) cmdInput = '/bin/sh'; mode = 'interactive'; }}
         disabled={running}
       >Interactive</button>
     </div>

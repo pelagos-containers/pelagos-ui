@@ -127,6 +127,19 @@ Open the Images view: click **Images** in the header.
 | 4.11 | Click "Remove" to confirm | Image removed; list refreshes; image no longer appears |
 | 4.12 | Try to remove an image that is in use by a running container | Error message appears inside the confirm dialog (pelagos refuses) |
 
+### 4d. Run from image
+
+| # | Action | Expected |
+|---|--------|----------|
+| 4.13 | Click "▶ Run" on any image row | Images view closes; Run panel opens with the image reference pre-filled in the Image field |
+| 4.14 | Verify Name and Command fields are empty; mode is "Background" | Only the image field is pre-filled — other fields are blank, mode defaults to Background |
+| 4.15 | Clear the pre-filled image reference and type a different one; click Run | Container launched with the manually-typed image, not the original pre-fill |
+| 4.16 | Click "▶ Run", then click ✕ in the Run panel without running | Panel closes cleanly; no container started |
+| 4.17 | Click "▶ Run", switch to Interactive mode, fill Command `/bin/sh`, click "Open terminal" | Terminal window opens with the pre-filled image; Images view is gone |
+| 4.18 | Open Images, click "▶ Run"; then click the header "Images" button again | Images view opens again (Run panel closes) — mutual exclusion works both ways |
+
+> **Note on "▶ Run" vs restart:** "▶ Run" always creates a **fresh container** with a clean writable layer. If you want to restart a stopped container and preserve files it wrote to its filesystem, use `pelagos start <name>` from the terminal (restart support in the UI is tracked in issue #18).
+
 ---
 
 ## 5. Window Behaviour
@@ -149,6 +162,7 @@ Quick sanity checks that previously-fixed bugs have not regressed:
 | 6.2 | Only one tray icon in menubar | Exactly one pelagos icon visible (no duplicate) |
 | 6.3 | Stop VM; observe dashboard error | Shows grey "VM stopped" (not red "I/O error: No such file or directory") |
 | 6.4 | Open Run panel; switch Background → Interactive → Background | Button label changes: "Run" / "Open terminal" / "Run" |
+| 6.5 | Click "▶ Run" on an image; close Run panel; click "▶ Run" on a different image | Second Run panel shows the second image — no stale pre-fill from the first |
 
 ---
 
