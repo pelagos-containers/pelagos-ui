@@ -2,11 +2,15 @@ mod backend;
 mod commands;
 
 use std::sync::Arc;
+use std::time::Duration;
 use tauri::{
     menu::{Menu, MenuItem, PredefinedMenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
     Manager,
 };
+
+const ICON_RUNNING: &[u8] = include_bytes!("../icons/tray-running.png");
+const ICON_STOPPED: &[u8] = include_bytes!("../icons/tray-stopped.png");
 
 pub fn run() {
     env_logger::init();
@@ -20,6 +24,7 @@ pub fn run() {
             commands::stop_container,
             commands::remove_container,
             commands::ping,
+            commands::vm_status,
         ])
         .setup(|app| {
             // Inject GTK CSS on Linux so the tray context menu has an opaque
@@ -31,19 +36,31 @@ pub fn run() {
             let open = MenuItem::with_id(app, "open", "Open Dashboard", true, None::<&str>)?;
             let sep = PredefinedMenuItem::separator(app)?;
             let quit = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
+
+            #[cfg(target_os = "macos")]
+            let menu = {
+                let start_vm = MenuItem::with_id(app, "start-vm", "Start VM", true, None::<&str>)?;
+                let stop_vm = MenuItem::with_id(app, "stop-vm", "Stop VM", true, None::<&str>)?;
+                let sep2 = PredefinedMenuItem::separator(app)?;
+                Menu::with_items(app, &[&open, &sep, &start_vm, &stop_vm, &sep2, &quit])?
+            };
+
+            #[cfg(not(target_os = "macos"))]
             let menu = Menu::with_items(app, &[&open, &sep, &quit])?;
 
-            TrayIconBuilder::new()
-                .icon(tauri::image::Image::from_bytes(include_bytes!(
-                    "../icons/tray.png"
-                ))?)
+            TrayIconBuilder::with_id("main-tray")
+                .icon(tauri::image::Image::from_bytes(ICON_RUNNING)?)
                 .menu(&menu)
                 .on_menu_event(|app, event| match event.id.as_ref() {
                     "open" => show_main_window(app),
                     "quit" => app.exit(0),
+                    #[cfg(target_os = "macos")]
+                    "start-vm" => spawn_vm_cmd(app, "start"),
+                    #[cfg(target_os = "macos")]
+                    "stop-vm" => spawn_vm_cmd(app, "stop"),
                     _ => {}
                 })
-                .on_tray_icon_event(|tray, event| {
+                .on_tray_icon_event(|tray: &tauri::tray::TrayIcon<_>, event| {
                     if let TrayIconEvent::Click {
                         button: MouseButton::Left,
                         button_state: MouseButtonState::Up,
@@ -54,6 +71,25 @@ pub fn run() {
                     }
                 })
                 .build(app)?;
+
+            // Background task: poll VM reachability and update tray icon.
+            let backend = app
+                .state::<Arc<dyn backend::RuntimeBackend>>()
+                .inner()
+                .clone();
+            let app_handle = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                loop {
+                    let running = backend.ping().await;
+                    if let Some(tray) = app_handle.tray_by_id("main-tray") {
+                        let bytes = if running { ICON_RUNNING } else { ICON_STOPPED };
+                        if let Ok(icon) = tauri::image::Image::from_bytes(bytes) {
+                            let _ = tray.set_icon(Some(icon));
+                        }
+                    }
+                    tokio::time::sleep(Duration::from_secs(5)).await;
+                }
+            });
 
             Ok(())
         })
@@ -97,6 +133,32 @@ fn show_main_window(app: &tauri::AppHandle) {
         let _ = win.show();
         let _ = win.set_focus();
     }
+}
+
+/// Spawn `pelagos-mac vm <sub>` (start or stop) in the background.
+#[cfg(target_os = "macos")]
+fn spawn_vm_cmd(app: &tauri::AppHandle, sub: &'static str) {
+    let _ = app; // app_handle not needed; pelagos-mac is self-contained
+    tauri::async_runtime::spawn(async move {
+        match tokio::process::Command::new("pelagos-mac")
+            .args(["vm", sub])
+            .output()
+            .await
+        {
+            Ok(out) if out.status.success() => {
+                log::info!("pelagos-mac vm {sub} succeeded");
+            }
+            Ok(out) => {
+                log::warn!(
+                    "pelagos-mac vm {sub} failed: {}",
+                    String::from_utf8_lossy(&out.stderr).trim()
+                );
+            }
+            Err(e) => {
+                log::warn!("pelagos-mac vm {sub}: {e}");
+            }
+        }
+    });
 }
 
 /// Inject GTK CSS to give the tray context menu an opaque background.
