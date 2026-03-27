@@ -9,7 +9,9 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use super::{BackendError, RuntimeBackend};
-use pelagos_protocol::{response::StreamKind, ContainerInfo, GuestCommand, GuestResponse, ImageInfo};
+use pelagos_protocol::{
+    response::StreamKind, ContainerInfo, GuestCommand, GuestResponse, ImageInfo,
+};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::UnixStream;
 use tokio::sync::mpsc::UnboundedSender;
@@ -185,7 +187,9 @@ impl RuntimeBackend for VsockBackend {
     }
 
     async fn list_images(&self) -> Result<Vec<ImageInfo>, BackendError> {
-        let stdout = self.roundtrip(&GuestCommand::ImageLs { json: true }).await?;
+        let stdout = self
+            .roundtrip(&GuestCommand::ImageLs { json: true })
+            .await?;
         Ok(serde_json::from_str(&stdout)?)
     }
 
