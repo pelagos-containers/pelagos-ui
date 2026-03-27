@@ -9,6 +9,7 @@
   let stopPolling: () => void;
   let showRun = false;
   let showImages = false;
+  let runPrefill = '';
 
   onMount(() => { stopPolling = startPolling(); });
   onDestroy(() => stopPolling?.());
@@ -35,16 +36,19 @@
     <h1>pelagos</h1>
     {#if $loading}<span class="hint">loading…</span>{/if}
     {#if $error}<span class={$error === 'VM stopped' ? 'hint' : 'err'}>{$error}</span>{/if}
-    <button class="run-btn" on:click={() => { showRun = !showRun; showImages = false; }}>+ Run</button>
+    <button class="run-btn" on:click={() => { runPrefill = ''; showRun = !showRun; showImages = false; }}>+ Run</button>
     <button class="run-btn" on:click={() => { showImages = !showImages; showRun = false; }}>Images</button>
   </header>
 
   {#if showRun}
-    <RunPanel on:done={() => (showRun = false)} />
+    <RunPanel prefillImage={runPrefill} on:done={() => (showRun = false)} />
   {/if}
 
   {#if showImages}
-    <ImagesView on:close={() => (showImages = false)} />
+    <ImagesView
+      on:close={() => (showImages = false)}
+      on:run={e => { runPrefill = e.detail; showImages = false; showRun = true; }}
+    />
   {/if}
 
   {#if !$loading && $containers.length === 0}
