@@ -79,11 +79,15 @@
   {/if}
 </div>
 
+<p class="attribution">Photo: Jeri Leandera (CC BY-SA)</p>
+
 <style>
   :global(*, *::before, *::after) { box-sizing: border-box; }
   :global(body) {
     margin: 0;
-    background: #0f1117;
+    background:
+      linear-gradient(rgba(15, 17, 23, 0.80), rgba(15, 17, 23, 0.80)),
+      url('/sea-slugs.jpg') center / cover fixed;
     color: #f0f0f0;
     font-family: system-ui, -apple-system, sans-serif;
     font-size: 14px;
@@ -106,6 +110,15 @@
   .run-btn:hover { background: #2ea043; }
   .empty  { color: #6b7280; margin-top: 40px; text-align: center; }
   code    { font-family: monospace; background: #1f2937; padding: 1px 5px; border-radius: 3px; }
+  .attribution {
+    position: fixed;
+    bottom: 8px;
+    right: 12px;
+    font-size: 0.65rem;
+    color: rgba(255, 255, 255, 0.45);
+    pointer-events: none;
+    user-select: none;
+  }
   table   { width: 100%; border-collapse: collapse; }
   th {
     text-align: left;
