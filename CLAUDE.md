@@ -2,7 +2,7 @@
 
 ## What This Project Is
 
-pelagos-ui is the management GUI for the [pelagos](https://github.com/skeptomai/pelagos)
+pelagos-ui is the management GUI for the [pelagos](https://github.com/pelagos-containers/pelagos)
 container runtime. It is a hybrid systray + full-window desktop application for macOS and
 Linux, built with [Tauri 2](https://tauri.app) (Rust backend) and Svelte 5 + SvelteKit (frontend).
 
@@ -86,14 +86,15 @@ Never add ad-hoc JSON shapes outside of `pelagos-protocol`.
 - Dashboard window: live container list with name, image, status, uptime, pid
 - Per-container actions: Stop, Remove
 
-**Backend work needed:**
-- `src-tauri/src/backend/vsock.rs`: send `{"cmd":"ps","all":true,"json":true}` over vsock, parse `Vec<ContainerInfo>`
-- `src-tauri/src/backend/process.rs`: run `pelagos ps --all --format json` as subprocess, parse stdout
-- `src-tauri/src/commands.rs`: `#[tauri::command] async fn list_containers()`, `vm_status()`, `stop_container(name)`, `remove_container(name, force)`
+**Backend status:**
+- `src-tauri/src/backend/vsock.rs`: implemented; `list_containers` blocked on structured JSON over vsock (see [pelagos-containers/pelagos-mac](https://github.com/pelagos-containers/pelagos-mac))
+- `src-tauri/src/backend/process.rs`: implemented
+- `src-tauri/src/commands.rs`: implemented
 
-**Guest work needed (tracked in pelagos-mac repo):**
-- `pelagos-guest`: extend `GuestCommand::Ps` to accept `json: bool` and pass `--format json` to the pelagos CLI
-- See `pelagos-mac` issue for tracking
+**Remaining work:**
+- Wire up vsock `list_containers` once pelagos-guest exposes `GuestCommand::Ps { json: true }`
+- Frontend: connect Svelte stores to Tauri commands
+- Systray: VM start/stop actions via vsock
 
 ---
 
