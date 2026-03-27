@@ -80,6 +80,7 @@
 </div>
 
 <p class="attribution">Photo: Jeri Leandera (CC BY-SA)</p>
+<p class="attribution attribution-left">Icon: hibernut / Noun Project (CC BY)</p>
 
 <style>
   :global(*, *::before, *::after) { box-sizing: border-box; }
@@ -118,6 +119,10 @@
     color: rgba(255, 255, 255, 0.45);
     pointer-events: none;
     user-select: none;
+  }
+  .attribution-left {
+    right: unset;
+    left: 12px;
   }
   table   { width: 100%; border-collapse: collapse; }
   th {
