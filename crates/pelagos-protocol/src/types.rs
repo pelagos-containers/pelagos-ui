@@ -166,6 +166,28 @@ pub struct ContainerInfo {
     pub labels: HashMap<String, String>,
 }
 
+/// A locally cached OCI image.
+///
+/// Deserialised from `pelagos image ls --json` output.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ImageInfo {
+    /// Full OCI reference, e.g. `"docker.io/library/alpine:latest"`.
+    pub reference: String,
+    /// Content-addressable digest, e.g. `"sha256:abc123..."`.
+    pub digest: String,
+    /// Layer digests (may be empty for single-layer images).
+    #[serde(default)]
+    pub layers: Vec<String>,
+}
+
+impl ImageInfo {
+    /// First 12 hex chars of the digest, without the `"sha256:"` prefix.
+    pub fn short_digest(&self) -> &str {
+        let hex = self.digest.strip_prefix("sha256:").unwrap_or(&self.digest);
+        &hex[..hex.len().min(12)]
+    }
+}
+
 impl ContainerInfo {
     /// Returns `true` if the container is currently running.
     pub fn is_running(&self) -> bool {

@@ -9,7 +9,7 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use super::{BackendError, RuntimeBackend};
-use pelagos_protocol::{response::StreamKind, ContainerInfo, GuestCommand, GuestResponse};
+use pelagos_protocol::{response::StreamKind, ContainerInfo, GuestCommand, GuestResponse, ImageInfo};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::UnixStream;
 use tokio::sync::mpsc::UnboundedSender;
@@ -182,5 +182,68 @@ impl RuntimeBackend for VsockBackend {
             }
         }
         Ok(exit_code)
+    }
+
+    async fn list_images(&self) -> Result<Vec<ImageInfo>, BackendError> {
+        let stdout = self.roundtrip(&GuestCommand::ImageLs { json: true }).await?;
+        Ok(serde_json::from_str(&stdout)?)
+    }
+
+    async fn pull_image(
+        &self,
+        reference: &str,
+        tx: UnboundedSender<String>,
+    ) -> Result<i32, BackendError> {
+        let cmd = GuestCommand::ImagePull {
+            reference: reference.to_string(),
+        };
+
+        let stream = self.connect().await?;
+        let (reader, mut writer) = stream.into_split();
+        let mut reader = BufReader::new(reader);
+
+        let mut line = serde_json::to_string(&cmd).map_err(BackendError::ParseError)?;
+        line.push('\n');
+        writer
+            .write_all(line.as_bytes())
+            .await
+            .map_err(BackendError::Io)?;
+
+        let mut buf = String::new();
+        let mut exit_code = 0;
+        loop {
+            buf.clear();
+            let n = reader.read_line(&mut buf).await.map_err(BackendError::Io)?;
+            if n == 0 {
+                break;
+            }
+            match serde_json::from_str::<GuestResponse>(buf.trim()) {
+                Ok(GuestResponse::Stream { data, .. }) => {
+                    for l in data.lines() {
+                        let _ = tx.send(l.to_string());
+                    }
+                }
+                Ok(GuestResponse::Exit { exit }) => {
+                    exit_code = exit;
+                    break;
+                }
+                Ok(GuestResponse::Error { error }) => {
+                    return Err(BackendError::Other(error));
+                }
+                Ok(_) => {}
+                Err(e) => log::warn!("unparseable guest response: {e}: {}", buf.trim()),
+            }
+        }
+        Ok(exit_code)
+    }
+
+    async fn remove_image(&self, reference: &str) -> Result<(), BackendError> {
+        let cmd = GuestCommand::ImageRm {
+            reference: reference.to_string(),
+        };
+        let stdout = self.roundtrip(&cmd).await?;
+        // roundtrip returns accumulated stdout; for rm we only care about exit/error
+        let _ = stdout;
+        Ok(())
     }
 }

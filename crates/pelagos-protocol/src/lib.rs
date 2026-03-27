@@ -47,7 +47,7 @@ pub mod types;
 
 pub use command::GuestCommand;
 pub use response::GuestResponse;
-pub use types::{ContainerInfo, ContainerStatus, HealthStatus, MountSpec, VmStatus};
+pub use types::{ContainerInfo, ContainerStatus, HealthStatus, ImageInfo, MountSpec, VmStatus};
 
 /// Current protocol version.  Increment when adding new variants or fields
 /// that older guests cannot handle.  Both sides embed this in their binary.

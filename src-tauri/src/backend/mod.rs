@@ -10,7 +10,7 @@ pub mod process;
 #[cfg(target_os = "macos")]
 pub mod vsock;
 
-use pelagos_protocol::ContainerInfo;
+use pelagos_protocol::{ContainerInfo, ImageInfo};
 use tokio::sync::mpsc::UnboundedSender;
 
 /// Errors returned by backend operations.
@@ -69,4 +69,18 @@ pub trait RuntimeBackend: Send + Sync + 'static {
         detach: bool,
         tx: UnboundedSender<String>,
     ) -> Result<i32, BackendError>;
+
+    /// List locally cached OCI images.
+    async fn list_images(&self) -> Result<Vec<ImageInfo>, BackendError>;
+
+    /// Pull an OCI image from a registry.  Each output line is sent to `tx`.
+    /// Returns the exit code (0 = success).
+    async fn pull_image(
+        &self,
+        reference: &str,
+        tx: UnboundedSender<String>,
+    ) -> Result<i32, BackendError>;
+
+    /// Remove a locally cached OCI image.
+    async fn remove_image(&self, reference: &str) -> Result<(), BackendError>;
 }

@@ -4,7 +4,7 @@
 //! work without sudo.
 
 use super::{BackendError, RuntimeBackend};
-use pelagos_protocol::ContainerInfo;
+use pelagos_protocol::{ContainerInfo, ImageInfo};
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::Command;
 use tokio::sync::mpsc::UnboundedSender;
@@ -130,6 +130,56 @@ impl RuntimeBackend for ProcessBackend {
         let _ = tokio::join!(h1, h2);
         let status = child.wait().await.map_err(BackendError::Io)?;
         Ok(status.code().unwrap_or(-1))
+    }
+
+    async fn list_images(&self) -> Result<Vec<ImageInfo>, BackendError> {
+        let (stdout, stderr, code) = self.run(&["image", "ls", "--json"]).await?;
+        if code != 0 {
+            return Err(BackendError::CommandFailed { code, stderr });
+        }
+        Ok(serde_json::from_str(&stdout)?)
+    }
+
+    async fn pull_image(
+        &self,
+        reference: &str,
+        tx: UnboundedSender<String>,
+    ) -> Result<i32, BackendError> {
+        let bin = self.bin.as_ref().ok_or(BackendError::BinaryNotFound)?;
+        let mut cmd = Command::new(bin);
+        cmd.args(["image", "pull", reference])
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped());
+
+        let mut child = cmd.spawn().map_err(BackendError::Io)?;
+        let stdout = child.stdout.take().unwrap();
+        let stderr = child.stderr.take().unwrap();
+
+        let tx2 = tx.clone();
+        let h1 = tokio::spawn(async move {
+            let mut lines = BufReader::new(stdout).lines();
+            while let Ok(Some(line)) = lines.next_line().await {
+                let _ = tx.send(line);
+            }
+        });
+        let h2 = tokio::spawn(async move {
+            let mut lines = BufReader::new(stderr).lines();
+            while let Ok(Some(line)) = lines.next_line().await {
+                let _ = tx2.send(line);
+            }
+        });
+
+        let _ = tokio::join!(h1, h2);
+        let status = child.wait().await.map_err(BackendError::Io)?;
+        Ok(status.code().unwrap_or(-1))
+    }
+
+    async fn remove_image(&self, reference: &str) -> Result<(), BackendError> {
+        let (_, stderr, code) = self.run(&["image", "rm", reference]).await?;
+        if code != 0 {
+            return Err(BackendError::CommandFailed { code, stderr });
+        }
+        Ok(())
     }
 }
 

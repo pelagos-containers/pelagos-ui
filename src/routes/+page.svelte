@@ -3,10 +3,12 @@
   import { containers, loading, error, startPolling } from '$lib/stores/containers';
   import ContainerRow from '$lib/components/ContainerRow.svelte';
   import RunPanel from '$lib/components/RunPanel.svelte';
+  import ImagesView from '$lib/components/ImagesView.svelte';
   import { stopContainer, removeContainer } from '$lib/ipc';
 
   let stopPolling: () => void;
   let showRun = false;
+  let showImages = false;
 
   onMount(() => { stopPolling = startPolling(); });
   onDestroy(() => stopPolling?.());
@@ -33,11 +35,16 @@
     <h1>pelagos</h1>
     {#if $loading}<span class="hint">loading…</span>{/if}
     {#if $error}<span class={$error === 'VM stopped' ? 'hint' : 'err'}>{$error}</span>{/if}
-    <button class="run-btn" on:click={() => (showRun = !showRun)}>+ Run</button>
+    <button class="run-btn" on:click={() => { showRun = !showRun; showImages = false; }}>+ Run</button>
+    <button class="run-btn" on:click={() => { showImages = !showImages; showRun = false; }}>Images</button>
   </header>
 
   {#if showRun}
     <RunPanel on:done={() => (showRun = false)} />
+  {/if}
+
+  {#if showImages}
+    <ImagesView on:close={() => (showImages = false)} />
   {/if}
 
   {#if !$loading && $containers.length === 0}

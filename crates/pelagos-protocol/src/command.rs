@@ -148,4 +148,26 @@ pub enum GuestCommand {
         #[serde(default)]
         tty: bool,
     },
+
+    // ------------------------------------------------------------------
+    // Image management
+    // ------------------------------------------------------------------
+    /// List locally cached OCI images.  Maps to `pelagos image ls [--json]`.
+    ///
+    /// When `json` is `true`, streams JSON output.  The UI backend always
+    /// sets `json: true` and deserialises accumulated stdout as `Vec<ImageInfo>`.
+    ImageLs {
+        #[serde(default)]
+        json: bool,
+    },
+
+    /// Pull an OCI image from a registry.  Maps to `pelagos image pull <reference>`.
+    ///
+    /// Guest streams stdout/stderr progress lines and ends with `Exit`.
+    ImagePull { reference: String },
+
+    /// Remove a locally cached OCI image.  Maps to `pelagos image rm <reference>`.
+    ///
+    /// Guest replies with `Exit` (exit code 0 = success).
+    ImageRm { reference: String },
 }

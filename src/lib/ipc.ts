@@ -27,3 +27,13 @@ export const runContainer       = (image: string, name: string | null, args: str
   invoke<number>('run_container', { image, name, args, detach: true });
 export const launchInteractive  = (image: string, name: string | null, args: string[]) =>
   invoke<void>('launch_interactive', { image, name, args });
+
+export interface ImageInfo {
+  reference: string;
+  digest:    string;
+  layers:    string[];
+}
+
+export const listImages   = ()                    => invoke<ImageInfo[]>('list_images');
+export const pullImage    = (reference: string)   => invoke<number>('pull_image', { reference });
+export const removeImage  = (reference: string)   => invoke<void>('remove_image', { reference });
