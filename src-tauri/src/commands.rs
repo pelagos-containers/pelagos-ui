@@ -7,7 +7,7 @@ use std::sync::Arc;
 use tauri::{Emitter, State};
 
 use crate::backend::{BackendError, RuntimeBackend};
-use pelagos_protocol::{ContainerInfo, VmStatus};
+use pelagos_protocol::{ContainerInfo, ImageInfo, VmStatus};
 
 /// Return all containers (running + exited).
 ///
@@ -101,4 +101,45 @@ pub async fn vm_status(
     } else {
         Ok(VmStatus::Stopped)
     }
+}
+
+/// List locally cached OCI images.
+///
+/// Frontend: `await invoke('list_images')`
+#[tauri::command]
+pub async fn list_images(
+    backend: State<'_, Arc<dyn RuntimeBackend>>,
+) -> Result<Vec<ImageInfo>, BackendError> {
+    backend.list_images().await
+}
+
+/// Pull an OCI image from a registry.  Streams progress as `pull-log` Tauri events.
+/// Returns the exit code (0 = success).
+///
+/// Frontend: subscribe to `pull-log` then `await invoke('pull_image', { reference })`
+#[tauri::command]
+pub async fn pull_image(
+    app: tauri::AppHandle,
+    backend: State<'_, Arc<dyn RuntimeBackend>>,
+    reference: String,
+) -> Result<i32, BackendError> {
+    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<String>();
+    let app2 = app.clone();
+    tokio::spawn(async move {
+        while let Some(line) = rx.recv().await {
+            let _ = app2.emit("pull-log", line);
+        }
+    });
+    backend.pull_image(&reference, tx).await
+}
+
+/// Remove a locally cached OCI image.
+///
+/// Frontend: `await invoke('remove_image', { reference })`
+#[tauri::command]
+pub async fn remove_image(
+    reference: String,
+    backend: State<'_, Arc<dyn RuntimeBackend>>,
+) -> Result<(), BackendError> {
+    backend.remove_image(&reference).await
 }

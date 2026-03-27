@@ -28,6 +28,9 @@ pub fn run() {
             commands::vm_status,
             commands::run_container,
             commands::launch_interactive,
+            commands::list_images,
+            commands::pull_image,
+            commands::remove_image,
         ])
         .setup(|app| {
             // Inject GTK CSS on Linux so the tray context menu has an opaque
