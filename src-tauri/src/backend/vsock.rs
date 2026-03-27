@@ -1,12 +1,9 @@
 //! macOS backend: communicates with pelagos-guest over vsock (Unix domain socket).
 //!
-//! The AVF VMM exposes the guest's vsock port as a Unix socket on the host at:
-//!   ~/Library/Application Support/io.pelagos/guest.sock
+//! The pelagos-mac daemon exposes the guest's vsock port as a Unix socket at:
+//!   ~/.local/share/pelagos/vm.sock  (default profile)
 //!
 //! Wire protocol: newline-delimited JSON.  See pelagos-protocol crate.
-//!
-//! NOTE: list_containers() returns Ok(vec![]) until pelagos-mac#98 lands.
-//! Once that PR merges, update list_containers to send Ps { json: true }.
 
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -18,10 +15,11 @@ use tokio::net::UnixStream;
 use tokio::time::timeout;
 
 pub fn default_socket_path() -> PathBuf {
-    dirs::data_dir()
+    // pelagos-mac daemon socket: ~/.local/share/pelagos/vm.sock
+    // This matches StateDir::open_profile("default") in pelagos-mac.
+    dirs::home_dir()
         .unwrap_or_else(|| PathBuf::from("/tmp"))
-        .join("io.pelagos")
-        .join("guest.sock")
+        .join(".local/share/pelagos/vm.sock")
 }
 
 pub struct VsockBackend {
