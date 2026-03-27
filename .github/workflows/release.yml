@@ -1,0 +1,49 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  release:
+    name: Build and release (macOS ARM64)
+    runs-on: macos-14
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry and build artifacts
+        uses: Swatinem/rust-cache@v2
+
+      - name: npm ci
+        run: npm ci
+
+      - name: Build Tauri app (frontend + Rust + DMG)
+        run: npm run tauri build
+
+      - name: Extract version from tauri.conf.json
+        id: version
+        run: |
+          VERSION="$(python3 -c "import json,sys; print(json.load(open('src-tauri/tauri.conf.json'))['version'])")"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          DMG="target/release/bundle/dmg/pelagos-ui_${VERSION}_aarch64.dmg"
+          gh release create "v${VERSION}" \
+            --title "pelagos-ui v${VERSION}" \
+            --generate-notes \
+            "${DMG}#pelagos-ui-${VERSION}-aarch64.dmg"
