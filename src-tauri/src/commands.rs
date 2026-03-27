@@ -7,7 +7,7 @@ use std::sync::Arc;
 use tauri::State;
 
 use crate::backend::{BackendError, RuntimeBackend};
-use pelagos_protocol::ContainerInfo;
+use pelagos_protocol::{ContainerInfo, VmStatus};
 
 /// Return all containers (running + exited).
 ///
@@ -48,4 +48,18 @@ pub async fn remove_container(
 #[tauri::command]
 pub async fn ping(backend: State<'_, Arc<dyn RuntimeBackend>>) -> Result<bool, BackendError> {
     Ok(backend.ping().await)
+}
+
+/// Returns the VM status: Running if the guest daemon responds to ping, Stopped otherwise.
+///
+/// Frontend: `await invoke('vm_status')` → `"Running"` | `"Stopped"` | `"Starting"`
+#[tauri::command]
+pub async fn vm_status(
+    backend: State<'_, Arc<dyn RuntimeBackend>>,
+) -> Result<VmStatus, BackendError> {
+    if backend.ping().await {
+        Ok(VmStatus::Running)
+    } else {
+        Ok(VmStatus::Stopped)
+    }
 }
