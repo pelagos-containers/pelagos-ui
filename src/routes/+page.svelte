@@ -2,9 +2,11 @@
   import { onDestroy, onMount } from 'svelte';
   import { containers, loading, error, startPolling } from '$lib/stores/containers';
   import ContainerRow from '$lib/components/ContainerRow.svelte';
+  import RunPanel from '$lib/components/RunPanel.svelte';
   import { stopContainer, removeContainer } from '$lib/ipc';
 
   let stopPolling: () => void;
+  let showRun = false;
 
   onMount(() => { stopPolling = startPolling(); });
   onDestroy(() => stopPolling?.());
@@ -31,7 +33,12 @@
     <h1>pelagos</h1>
     {#if $loading}<span class="hint">loading…</span>{/if}
     {#if $error}<span class={$error === 'VM stopped' ? 'hint' : 'err'}>{$error}</span>{/if}
+    <button class="run-btn" on:click={() => (showRun = !showRun)}>+ Run</button>
   </header>
+
+  {#if showRun}
+    <RunPanel on:done={() => (showRun = false)} />
+  {/if}
 
   {#if !$loading && $containers.length === 0}
     <p class="empty">No containers.  Run <code>pelagos run &lt;image&gt;</code> to start one.</p>
@@ -75,6 +82,17 @@
   h1      { margin: 0; font-size: 1.1rem; font-weight: 700; letter-spacing: -0.01em; }
   .hint   { color: #6b7280; font-size: 0.8rem; }
   .err    { color: #f87171; font-size: 0.8rem; }
+  .run-btn {
+    margin-left: auto;
+    background: #238636;
+    border: none;
+    border-radius: 4px;
+    color: #fff;
+    cursor: pointer;
+    font-size: 0.8rem;
+    padding: 3px 12px;
+  }
+  .run-btn:hover { background: #2ea043; }
   .empty  { color: #6b7280; margin-top: 40px; text-align: center; }
   code    { font-family: monospace; background: #1f2937; padding: 1px 5px; border-radius: 3px; }
   table   { width: 100%; border-collapse: collapse; }
