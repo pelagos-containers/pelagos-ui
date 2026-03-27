@@ -158,11 +158,35 @@ fn show_main_window(app: &tauri::AppHandle) {
     }
 }
 
+/// Locate the `pelagos-mac` binary.
+///
+/// macOS GUI apps launch with a stripped PATH that excludes Homebrew.
+/// We check known locations before falling back to PATH lookup.
+#[cfg(target_os = "macos")]
+fn find_pelagos_mac() -> Option<std::path::PathBuf> {
+    // Homebrew on Apple Silicon and Intel respectively.
+    for candidate in &[
+        "/opt/homebrew/bin/pelagos-mac",
+        "/usr/local/bin/pelagos-mac",
+    ] {
+        let p = std::path::Path::new(candidate);
+        if p.exists() {
+            return Some(p.to_owned());
+        }
+    }
+    // Fall back to PATH lookup (works in dev / shell launches).
+    which::which("pelagos-mac").ok()
+}
+
 /// Spawn `pelagos-mac vm <sub>` (start or stop) in the background.
 #[cfg(target_os = "macos")]
 fn spawn_vm_cmd(sub: &'static str) {
     tauri::async_runtime::spawn(async move {
-        match tokio::process::Command::new("pelagos-mac")
+        let Some(bin) = find_pelagos_mac() else {
+            log::warn!("pelagos-mac not found — cannot {sub} VM");
+            return;
+        };
+        match tokio::process::Command::new(bin)
             .args(["vm", sub])
             .output()
             .await

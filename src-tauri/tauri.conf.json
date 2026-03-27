@@ -20,11 +20,7 @@
         "minHeight": 500,
         "visible": false
       }
-    ],
-    "trayIcon": {
-      "iconPath": "icons/tray.png",
-      "iconAsTemplate": true
-    }
+    ]
   },
   "bundle": {
     "active": true,
