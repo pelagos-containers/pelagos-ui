@@ -13,7 +13,7 @@
   let runPrefill = '';
 
   // Filter + sort state
-  let runningOnly = false;
+  let runningOnly = true;
   type SortCol = 'name' | 'status' | 'image' | 'command' | 'started_at' | 'pid';
   let sortCol: SortCol = 'started_at';
   let sortAsc = false; // default: newest first
