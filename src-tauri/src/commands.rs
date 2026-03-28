@@ -55,6 +55,7 @@ pub async fn run_container(
     name: Option<String>,
     args: Vec<String>,
     detach: bool,
+    ports: Vec<String>,
 ) -> Result<i32, BackendError> {
     let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<String>();
     let app2 = app.clone();
@@ -64,7 +65,7 @@ pub async fn run_container(
         }
     });
     backend
-        .run_container(&image, name.as_deref(), args, detach, tx)
+        .run_container(&image, name.as_deref(), args, detach, ports, tx)
         .await
 }
 
@@ -77,8 +78,9 @@ pub fn launch_interactive(
     image: String,
     name: Option<String>,
     args: Vec<String>,
+    ports: Vec<String>,
 ) -> Result<(), String> {
-    crate::terminal::open_in_terminal(&image, name.as_deref(), &args)
+    crate::terminal::open_in_terminal(&image, name.as_deref(), &args, &ports)
 }
 
 /// Returns true if the runtime is reachable.

@@ -23,10 +23,10 @@ export const listContainers  = ()                              => invoke<Contain
 export const stopContainer   = (name: string)                  => invoke<void>('stop_container',   { name });
 export const removeContainer = (name: string, force: boolean)  => invoke<void>('remove_container', { name, force });
 export const ping            = ()                              => invoke<boolean>('ping');
-export const runContainer       = (image: string, name: string | null, args: string[]) =>
-  invoke<number>('run_container', { image, name, args, detach: true });
-export const launchInteractive  = (image: string, name: string | null, args: string[]) =>
-  invoke<void>('launch_interactive', { image, name, args });
+export const runContainer      = (image: string, name: string | null, args: string[], ports: string[]) =>
+  invoke<number>('run_container', { image, name, args, detach: true, ports });
+export const launchInteractive = (image: string, name: string | null, args: string[], ports: string[]) =>
+  invoke<void>('launch_interactive', { image, name, args, ports });
 
 export interface ImageInfo {
   reference: string;

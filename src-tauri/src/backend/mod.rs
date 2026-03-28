@@ -67,6 +67,7 @@ pub trait RuntimeBackend: Send + Sync + 'static {
         name: Option<&str>,
         args: Vec<String>,
         detach: bool,
+        ports: Vec<String>,
         tx: UnboundedSender<String>,
     ) -> Result<i32, BackendError>;
 

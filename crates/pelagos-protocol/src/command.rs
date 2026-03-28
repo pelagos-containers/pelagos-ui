@@ -92,6 +92,12 @@ pub enum GuestCommand {
         /// Run detached (`--detach`).
         #[serde(default)]
         detach: bool,
+        /// Port mappings `HOST:CONTAINER` forwarded to `pelagos run --publish`.
+        #[serde(default)]
+        publish: Vec<String>,
+        /// Network mode forwarded to `pelagos run --network` (e.g. `"pasta"`).
+        #[serde(default)]
+        network: Option<String>,
     },
 
     /// Stop a running container by name.  Maps to `pelagos stop <name>`.

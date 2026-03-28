@@ -9,7 +9,12 @@
 
 /// Build and launch `pelagos run --tty --interactive [--name N] image [args]`
 /// in a new terminal window.
-pub fn open_in_terminal(image: &str, name: Option<&str>, args: &[String]) -> Result<(), String> {
+pub fn open_in_terminal(
+    image: &str,
+    name: Option<&str>,
+    args: &[String],
+    ports: &[String],
+) -> Result<(), String> {
     let pelagos = find_pelagos_bin();
     let mut parts: Vec<String> = vec![
         shell_quote(&pelagos),
@@ -20,6 +25,14 @@ pub fn open_in_terminal(image: &str, name: Option<&str>, args: &[String]) -> Res
     if let Some(n) = name {
         parts.push("--name".into());
         parts.push(shell_quote(n));
+    }
+    if !ports.is_empty() {
+        for p in ports {
+            parts.push("--publish".into());
+            parts.push(shell_quote(p));
+        }
+        parts.push("--network".into());
+        parts.push("pasta".into());
     }
     parts.push(shell_quote(image));
     for a in args {

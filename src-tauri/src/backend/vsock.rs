@@ -136,8 +136,14 @@ impl RuntimeBackend for VsockBackend {
         name: Option<&str>,
         args: Vec<String>,
         detach: bool,
+        ports: Vec<String>,
         tx: UnboundedSender<String>,
     ) -> Result<i32, BackendError> {
+        let network = if ports.is_empty() {
+            None
+        } else {
+            Some("pasta".to_string())
+        };
         let cmd = GuestCommand::Run {
             image: image.to_string(),
             args,
@@ -145,6 +151,8 @@ impl RuntimeBackend for VsockBackend {
             detach,
             env: Default::default(),
             mounts: vec![],
+            publish: ports,
+            network,
         };
 
         let stream = self.connect().await?;

@@ -20,6 +20,7 @@
   let image = prefillImage;
   let nameInput = '';
   let cmdInput = '';
+  let portsInput = '';
   let mode: 'background' | 'interactive' = 'background';
 
   let running = false;
@@ -32,12 +33,13 @@
     try {
       const args = cmdInput.trim() ? cmdInput.trim().split(/\s+/) : [];
       const name = nameInput.trim() || null;
+      const ports = portsInput.trim() ? portsInput.trim().split(/[\s,]+/) : [];
       if (mode === 'interactive') {
-        await launchInteractive(image.trim(), name, args);
+        await launchInteractive(image.trim(), name, args, ports);
         // Terminal window opened — close panel, container will appear once it starts
         dispatch('done');
       } else {
-        await runContainer(image.trim(), name, args);
+        await runContainer(image.trim(), name, args, ports);
         dispatch('done');
       }
     } catch (e) {
@@ -72,6 +74,12 @@
       class="input wide"
       placeholder={mode === 'interactive' ? 'Command  (e.g. /bin/sh)' : 'Command  (e.g. sleep 60)'}
       bind:value={cmdInput}
+      disabled={running}
+    />
+    <input
+      class="input"
+      placeholder="Ports  (e.g. 8080:80)"
+      bind:value={portsInput}
       disabled={running}
     />
 

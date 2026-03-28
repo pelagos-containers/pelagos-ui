@@ -91,6 +91,7 @@ impl RuntimeBackend for ProcessBackend {
         name: Option<&str>,
         args: Vec<String>,
         detach: bool,
+        ports: Vec<String>,
         tx: UnboundedSender<String>,
     ) -> Result<i32, BackendError> {
         let bin = self.bin.as_ref().ok_or(BackendError::BinaryNotFound)?;
@@ -101,6 +102,12 @@ impl RuntimeBackend for ProcessBackend {
         }
         if detach {
             cmd.arg("--detach");
+        }
+        if !ports.is_empty() {
+            for p in &ports {
+                cmd.arg("--publish").arg(p);
+            }
+            cmd.arg("--network").arg("pasta");
         }
         cmd.arg(image);
         for a in &args {
