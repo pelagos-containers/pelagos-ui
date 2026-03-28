@@ -89,8 +89,8 @@ fn parse_volumes(specs: &[String]) -> Result<Vec<GuestMount>, BackendError> {
     if specs.is_empty() {
         return Ok(vec![]);
     }
-    let home = dirs::home_dir()
-        .ok_or_else(|| BackendError::Other("cannot determine $HOME".into()))?;
+    let home =
+        dirs::home_dir().ok_or_else(|| BackendError::Other("cannot determine $HOME".into()))?;
     let mut mounts = Vec::with_capacity(specs.len());
     for spec in specs {
         let parts: Vec<&str> = spec.splitn(3, ':').collect();
