@@ -1,10 +1,21 @@
 <script lang="ts">
-  import { createEventDispatcher } from 'svelte';
-  import { runContainer, launchInteractive } from '$lib/ipc';
+  import { createEventDispatcher, onMount } from 'svelte';
+  import { runContainer, launchInteractive, listImages } from '$lib/ipc';
 
   const dispatch = createEventDispatcher<{ done: void }>();
 
   export let prefillImage = '';
+
+  let imageRefs: string[] = [];
+
+  onMount(async () => {
+    try {
+      const imgs = await listImages();
+      imageRefs = imgs.map(i => i.reference);
+    } catch {
+      // VM may be down — plain text input still works
+    }
+  });
 
   let image = prefillImage;
   let nameInput = '';
@@ -40,11 +51,17 @@
   <div class="row">
     <input
       class="input wide"
+      list="run-image-list"
       placeholder="Image  (e.g. alpine:latest)"
       bind:value={image}
       disabled={running}
       on:keydown={(e) => e.key === 'Enter' && run()}
     />
+    <datalist id="run-image-list">
+      {#each imageRefs as ref}
+        <option value={ref} />
+      {/each}
+    </datalist>
     <input
       class="input"
       placeholder="Name  (optional)"
