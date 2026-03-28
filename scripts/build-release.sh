@@ -9,10 +9,16 @@
 # To install locally:
 #   bash scripts/build-release.sh
 #   brew install --cask dist/Casks/pelagos-ui.rb
+#   xattr -dr com.apple.quarantine /Applications/pelagos-ui.app
 #
 # To upgrade an existing install:
 #   bash scripts/build-release.sh
 #   brew reinstall --cask dist/Casks/pelagos-ui.rb
+#   xattr -dr com.apple.quarantine /Applications/pelagos-ui.app
+#
+# Note: the xattr step is required because the app is ad-hoc signed (no
+# Developer ID). Gatekeeper quarantines it on install and macOS will report
+# it as "damaged". For distribution to other users, notarization is needed.
 
 set -euo pipefail
 
