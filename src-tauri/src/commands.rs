@@ -7,7 +7,7 @@ use std::sync::Arc;
 use tauri::{Emitter, State};
 
 use crate::backend::{BackendError, RuntimeBackend};
-use pelagos_protocol::{ContainerInfo, ImageInfo, VmStatus};
+use pelagos_protocol::{ContainerInfo, GuestMount, ImageInfo, VmStatus};
 
 /// Return all containers (running + exited).
 ///
@@ -45,9 +45,15 @@ pub async fn remove_container(
 /// Start a container.  Streams stdout/stderr as `run-log` Tauri events.
 /// Returns the exit code (0 = success).
 ///
+/// `volumes` is a list of `HOST_PATH:CONTAINER_PATH[:ro]` strings.
+/// Host paths must be under `$HOME` — the pelagos-mac daemon always shares
+/// `$HOME` as virtiofs tag `share0`, so those paths are reachable in the VM
+/// without a restart.  Paths outside `$HOME` are rejected with an error.
+///
 /// Frontend: subscribe to `run-log` before calling, then
-/// `await invoke('run_container', { image, name, args, detach })`
+/// `await invoke('run_container', { image, name, args, detach, ports, volumes })`
 #[tauri::command]
+#[allow(clippy::too_many_arguments)]
 pub async fn run_container(
     app: tauri::AppHandle,
     backend: State<'_, Arc<dyn RuntimeBackend>>,
@@ -56,7 +62,9 @@ pub async fn run_container(
     args: Vec<String>,
     detach: bool,
     ports: Vec<String>,
+    volumes: Vec<String>,
 ) -> Result<i32, BackendError> {
+    let mounts = parse_volumes(&volumes)?;
     let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<String>();
     let app2 = app.clone();
     tokio::spawn(async move {
@@ -65,22 +73,95 @@ pub async fn run_container(
         }
     });
     backend
-        .run_container(&image, name.as_deref(), args, detach, ports, tx)
+        .run_container(&image, name.as_deref(), args, detach, ports, mounts, tx)
         .await
+}
+
+/// Parse a list of `HOST:CONTAINER[:ro]` volume specs into [`GuestMount`]s.
+///
+/// Host paths must be absolute and under `$HOME`.  `$HOME` is always shared
+/// with the VM as virtiofs tag `share0`; subdirectories within it are available
+/// as subpaths of that share without requiring a VM restart.
+///
+/// Returns an error for any spec that is malformed or outside `$HOME`.
+#[cfg(target_os = "macos")]
+fn parse_volumes(specs: &[String]) -> Result<Vec<GuestMount>, BackendError> {
+    if specs.is_empty() {
+        return Ok(vec![]);
+    }
+    let home = dirs::home_dir()
+        .ok_or_else(|| BackendError::Other("cannot determine $HOME".into()))?;
+    let mut mounts = Vec::with_capacity(specs.len());
+    for spec in specs {
+        let parts: Vec<&str> = spec.splitn(3, ':').collect();
+        if parts.len() < 2 {
+            return Err(BackendError::Other(format!(
+                "invalid volume spec {spec:?}: expected HOST:CONTAINER or HOST:CONTAINER:ro"
+            )));
+        }
+        let host_path = std::path::Path::new(parts[0]);
+        let container_path = parts[1].to_string();
+        let read_only = parts.get(2).map(|s| *s == "ro").unwrap_or(false);
+        if !host_path.is_absolute() {
+            return Err(BackendError::Other(format!(
+                "volume host path {host_path:?} must be absolute"
+            )));
+        }
+        let subpath = host_path.strip_prefix(&home).map_err(|_| {
+            BackendError::Other(format!(
+                "volume host path {} is outside $HOME — only paths under $HOME \
+                 are accessible in the VM without a restart",
+                host_path.display()
+            ))
+        })?;
+        mounts.push(GuestMount {
+            tag: "share0".into(),
+            subpath: subpath.to_string_lossy().into_owned(),
+            container_path,
+            read_only,
+        });
+    }
+    Ok(mounts)
+}
+
+#[cfg(not(target_os = "macos"))]
+fn parse_volumes(specs: &[String]) -> Result<Vec<GuestMount>, BackendError> {
+    // On Linux the process backend passes mounts directly as bind-mounts.
+    // GuestMount.subpath is unused; tag and subpath are repurposed as src path.
+    Ok(specs
+        .iter()
+        .filter_map(|spec| {
+            let parts: Vec<&str> = spec.splitn(3, ':').collect();
+            if parts.len() < 2 {
+                return None;
+            }
+            let read_only = parts.get(2).map(|s| *s == "ro").unwrap_or(false);
+            Some(GuestMount {
+                tag: parts[0].to_string(),
+                subpath: String::new(),
+                container_path: parts[1].to_string(),
+                read_only,
+            })
+        })
+        .collect())
 }
 
 /// Open a new terminal window running `pelagos run --tty --interactive image [cmd]`.
 /// Returns immediately — the terminal handles the session.
 ///
-/// Frontend: `await invoke('launch_interactive', { image, name, args })`
+/// `volumes` is a list of `HOST:CONTAINER[:ro]` strings passed as `-v` flags
+/// to the pelagos-mac CLI, which handles the virtiofs translation itself.
+///
+/// Frontend: `await invoke('launch_interactive', { image, name, args, ports, volumes })`
 #[tauri::command]
 pub fn launch_interactive(
     image: String,
     name: Option<String>,
     args: Vec<String>,
     ports: Vec<String>,
+    volumes: Vec<String>,
 ) -> Result<(), String> {
-    crate::terminal::open_in_terminal(&image, name.as_deref(), &args, &ports)
+    crate::terminal::open_in_terminal(&image, name.as_deref(), &args, &ports, &volumes)
 }
 
 /// Returns true if the runtime is reachable.

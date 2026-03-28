@@ -61,16 +61,33 @@ pub enum HealthStatus {
     None,
 }
 
-/// A bind mount or volume mount attached to a container.
+/// A virtiofs bind mount applied inside a container.
 ///
-/// Used in [`crate::command::GuestCommand::Run`] to describe host→guest path mappings.
-/// On macOS, `host_path` is a virtiofs-relative path; the guest daemon translates
-/// it to `/mnt/<tag>/<relative>` before forwarding to `pelagos run`.
+/// Used in [`crate::command::GuestCommand::Run`] to describe which virtiofs share
+/// to bind into the container and at what path.
+///
+/// The pelagos-mac daemon pre-mounts virtiofs shares in the VM at `/mnt/<tag>`:
+/// - `share0` is always `$HOME` (available without VM restart).
+/// - Additional shares for paths outside `$HOME` require a VM restart.
+///
+/// The guest daemon constructs the bind-mount path as:
+/// - `subpath` empty → `/mnt/<tag>/<container_path>`
+/// - `subpath` non-empty → `/mnt/<tag>/<subpath>` → `<container_path>`
+///
+/// ## Wire format
+///
+/// ```json
+/// {"tag":"share0","subpath":"mysite","container_path":"/usr/share/nginx/html"}
+/// ```
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct MountSpec {
-    /// Absolute path on the host (macOS) or in the VM filesystem (Linux).
-    pub host_path: String,
-    /// Absolute path inside the container where the mount appears.
+pub struct GuestMount {
+    /// virtiofs tag — the host directory is mounted at `/mnt/<tag>` in the VM.
+    /// `share0` is always `$HOME`.
+    pub tag: String,
+    /// Relative subpath within the virtiofs mount root (empty = mount the whole share).
+    #[serde(default)]
+    pub subpath: String,
+    /// Absolute path inside the container where the directory appears.
     pub container_path: String,
     /// Mount is read-only if `true`.
     #[serde(default)]

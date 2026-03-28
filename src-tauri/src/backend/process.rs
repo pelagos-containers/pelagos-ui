@@ -4,7 +4,7 @@
 //! work without sudo.
 
 use super::{BackendError, RuntimeBackend};
-use pelagos_protocol::{ContainerInfo, ImageInfo};
+use pelagos_protocol::{ContainerInfo, GuestMount, ImageInfo};
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::Command;
 use tokio::sync::mpsc::UnboundedSender;
@@ -92,6 +92,7 @@ impl RuntimeBackend for ProcessBackend {
         args: Vec<String>,
         detach: bool,
         ports: Vec<String>,
+        mounts: Vec<GuestMount>,
         tx: UnboundedSender<String>,
     ) -> Result<i32, BackendError> {
         let bin = self.bin.as_ref().ok_or(BackendError::BinaryNotFound)?;
@@ -108,6 +109,19 @@ impl RuntimeBackend for ProcessBackend {
                 cmd.arg("--publish").arg(p);
             }
             cmd.arg("--network").arg("pasta");
+        }
+        for m in &mounts {
+            let src = if m.subpath.is_empty() {
+                format!("/mnt/{}", m.tag)
+            } else {
+                format!("/mnt/{}/{}", m.tag, m.subpath)
+            };
+            let spec = if m.read_only {
+                format!("{}:{}:ro", src, m.container_path)
+            } else {
+                format!("{}:{}", src, m.container_path)
+            };
+            cmd.arg("--mount").arg(spec);
         }
         cmd.arg(image);
         for a in &args {

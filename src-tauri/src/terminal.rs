@@ -14,6 +14,7 @@ pub fn open_in_terminal(
     name: Option<&str>,
     args: &[String],
     ports: &[String],
+    volumes: &[String],
 ) -> Result<(), String> {
     let pelagos = find_pelagos_bin();
     let mut parts: Vec<String> = vec![
@@ -33,6 +34,10 @@ pub fn open_in_terminal(
         }
         parts.push("-n".into());
         parts.push("pasta".into());
+    }
+    for v in volumes {
+        parts.push("-v".into());
+        parts.push(shell_quote(v));
     }
     parts.push(shell_quote(image));
     for a in args {

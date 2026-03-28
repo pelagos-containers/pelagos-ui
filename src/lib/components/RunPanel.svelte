@@ -21,6 +21,7 @@
   let nameInput = '';
   let cmdInput = '';
   let portsInput = '';
+  let volumesInput = '';
   let mode: 'background' | 'interactive' = 'background';
 
   let running = false;
@@ -34,12 +35,13 @@
       const args = cmdInput.trim() ? cmdInput.trim().split(/\s+/) : [];
       const name = nameInput.trim() || null;
       const ports = portsInput.trim() ? portsInput.trim().split(/[\s,]+/) : [];
+      const volumes = volumesInput.trim() ? volumesInput.trim().split(/[\s,]+/) : [];
       if (mode === 'interactive') {
-        await launchInteractive(image.trim(), name, args, ports);
+        await launchInteractive(image.trim(), name, args, ports, volumes);
         // Terminal window opened — close panel, container will appear once it starts
         dispatch('done');
       } else {
-        await runContainer(image.trim(), name, args, ports);
+        await runContainer(image.trim(), name, args, ports, volumes);
         dispatch('done');
       }
     } catch (e) {
@@ -80,6 +82,12 @@
       class="input"
       placeholder="Ports  (e.g. 8080:80)"
       bind:value={portsInput}
+      disabled={running}
+    />
+    <input
+      class="input wide"
+      placeholder="Volumes  (e.g. ~/mysite:/usr/share/nginx/html)"
+      bind:value={volumesInput}
       disabled={running}
     />
 

@@ -10,7 +10,7 @@ use std::time::Duration;
 
 use super::{BackendError, RuntimeBackend};
 use pelagos_protocol::{
-    response::StreamKind, ContainerInfo, GuestCommand, GuestResponse, ImageInfo,
+    response::StreamKind, ContainerInfo, GuestCommand, GuestMount, GuestResponse, ImageInfo,
 };
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::UnixStream;
@@ -176,6 +176,7 @@ impl RuntimeBackend for VsockBackend {
         args: Vec<String>,
         detach: bool,
         ports: Vec<String>,
+        mounts: Vec<GuestMount>,
         tx: UnboundedSender<String>,
     ) -> Result<i32, BackendError> {
         // Register macOS-side port listeners with the pelagos-mac daemon BEFORE
@@ -201,7 +202,7 @@ impl RuntimeBackend for VsockBackend {
             name: name.map(str::to_string),
             detach,
             env: Default::default(),
-            mounts: vec![],
+            mounts,
             publish: ports,
             network,
         };

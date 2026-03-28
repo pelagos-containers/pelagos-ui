@@ -11,7 +11,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::types::MountSpec;
+use crate::types::GuestMount;
 
 /// A command sent from the UI host process to the guest daemon over vsock.
 ///
@@ -83,9 +83,9 @@ pub enum GuestCommand {
         /// Environment variables as `KEY=VALUE` strings.
         #[serde(default)]
         env: std::collections::HashMap<String, String>,
-        /// Bind mounts (virtiofs host paths → container paths).
+        /// Virtiofs bind mounts (tag + subpath → container path).
         #[serde(default)]
-        mounts: Vec<MountSpec>,
+        mounts: Vec<GuestMount>,
         /// Optional container name (`--name`).
         #[serde(default)]
         name: Option<String>,
