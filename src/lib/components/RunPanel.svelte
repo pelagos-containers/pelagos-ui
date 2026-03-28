@@ -63,7 +63,7 @@
     />
     <datalist id="run-image-list">
       {#each imageRefs as ref}
-        <option value={ref} />
+        <option value={ref}></option>
       {/each}
     </datalist>
     <input
@@ -76,18 +76,6 @@
       class="input wide"
       placeholder={mode === 'interactive' ? 'Command  (e.g. /bin/sh)' : 'Command  (e.g. sleep 60)'}
       bind:value={cmdInput}
-      disabled={running}
-    />
-    <input
-      class="input"
-      placeholder="Ports  (e.g. 8080:80)"
-      bind:value={portsInput}
-      disabled={running}
-    />
-    <input
-      class="input wide"
-      placeholder="Volumes  (e.g. ~/mysite:/usr/share/nginx/html)"
-      bind:value={volumesInput}
       disabled={running}
     />
 
@@ -110,6 +98,20 @@
       {running ? '…' : mode === 'interactive' ? 'Open terminal' : 'Run'}
     </button>
     <button class="btn ghost" on:click={() => dispatch('done')} disabled={running}>✕</button>
+  </div>
+  <div class="row">
+    <input
+      class="input"
+      placeholder="Ports  (e.g. 8080:80)"
+      bind:value={portsInput}
+      disabled={running}
+    />
+    <input
+      class="input wide"
+      placeholder="Volumes  (e.g. ~/mysite:/usr/share/nginx/html)"
+      bind:value={volumesInput}
+      disabled={running}
+    />
   </div>
   {#if error}<div class="err">{error}</div>{/if}
 </div>
