@@ -33,7 +33,7 @@
 
 <div class="app">
   <header>
-    <h1>pelagos</h1>
+    <h1>Pelagos</h1>
     {#if $loading}<span class="hint">loading…</span>{/if}
     {#if $error}<span class={$error === 'VM stopped' ? 'hint' : 'err'}>{$error}</span>{/if}
     <button class="run-btn" on:click={() => { runPrefill = ''; showRun = !showRun; showImages = false; }}>+ Run</button>

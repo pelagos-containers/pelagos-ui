@@ -46,8 +46,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           VERSION="${{ steps.version.outputs.version }}"
-          DMG="target/release/bundle/dmg/pelagos-ui_${VERSION}_aarch64.dmg"
+          DMG="target/release/bundle/dmg/Pelagos_${VERSION}_aarch64.dmg"
           gh release create "v${VERSION}" \
-            --title "pelagos-ui v${VERSION}" \
+            --title "Pelagos v${VERSION}" \
             --generate-notes \
             "${DMG}#pelagos-ui-${VERSION}-aarch64.dmg"

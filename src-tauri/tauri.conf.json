@@ -1,5 +1,5 @@
 {
-  "productName": "pelagos-ui",
+  "productName": "Pelagos",
   "version": "0.1.1",
   "identifier": "io.pelagos.ui",
   "build": {
@@ -13,7 +13,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "pelagos",
+        "title": "Pelagos",
         "width": 1100,
         "height": 700,
         "minWidth": 800,
