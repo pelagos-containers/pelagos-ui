@@ -9,12 +9,12 @@
 # To install locally:
 #   bash scripts/build-release.sh
 #   brew install --cask dist/Casks/pelagos-ui.rb
-#   xattr -dr com.apple.quarantine /Applications/pelagos-ui.app
+#   xattr -dr com.apple.quarantine /Applications/Pelagos.app
 #
 # To upgrade an existing install:
 #   bash scripts/build-release.sh
 #   brew reinstall --cask dist/Casks/pelagos-ui.rb
-#   xattr -dr com.apple.quarantine /Applications/pelagos-ui.app
+#   xattr -dr com.apple.quarantine /Applications/Pelagos.app
 #
 # Note: the xattr step is required because the app is ad-hoc signed (no
 # Developer ID). Gatekeeper quarantines it on install and macOS will report
@@ -40,7 +40,7 @@ echo "[release] building frontend + Tauri app..."
 cd "$REPO"
 npm run tauri build 2>&1 | grep -E "Bundling|Finished|Built|Error|error"
 
-TAURI_DMG="$REPO/target/release/bundle/dmg/pelagos-ui_${VERSION}_aarch64.dmg"
+TAURI_DMG="$REPO/target/release/bundle/dmg/Pelagos_${VERSION}_aarch64.dmg"
 if [[ ! -f "$TAURI_DMG" ]]; then
     echo "ERROR: expected DMG not found: $TAURI_DMG"
     exit 1
@@ -78,17 +78,17 @@ cask "pelagos-ui" do
   sha256 "${SHA256}"
 
   url "file://${DIST}/${DMG_NAME}"
-  name "pelagos-ui"
+  name "Pelagos"
   desc "Desktop GUI for the pelagos container runtime"
   homepage "https://github.com/pelagos-containers/pelagos-ui"
 
   # Requires pelagos-mac formula: brew install pelagos-containers/tap/pelagos-mac
-  app "pelagos-ui.app"
+  app "Pelagos.app"
 
   # Ad-hoc signed only — remove Gatekeeper quarantine after install.
   postflight do
     system_command "/usr/bin/xattr",
-      args: ["-dr", "com.apple.quarantine", "#{appdir}/pelagos-ui.app"]
+      args: ["-dr", "com.apple.quarantine", "#{appdir}/Pelagos.app"]
   end
 
   zap trash: [
