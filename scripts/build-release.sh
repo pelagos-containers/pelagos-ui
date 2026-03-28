@@ -85,6 +85,12 @@ cask "pelagos-ui" do
   # Requires pelagos-mac formula: brew install pelagos-containers/tap/pelagos-mac
   app "pelagos-ui.app"
 
+  # Ad-hoc signed only — remove Gatekeeper quarantine after install.
+  postflight do
+    system_command "/usr/bin/xattr",
+      args: ["-dr", "com.apple.quarantine", "#{appdir}/pelagos-ui.app"]
+  end
+
   zap trash: [
     "~/Library/Logs/io.pelagos.ui",
     "~/Library/WebKit/io.pelagos.ui",
