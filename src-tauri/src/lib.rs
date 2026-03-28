@@ -120,6 +120,9 @@ pub fn run() {
                 }
             });
 
+            // Show the dashboard on launch — user can close it to the tray.
+            show_main_window(app.handle());
+
             Ok(())
         })
         .on_window_event(|window, event| {
