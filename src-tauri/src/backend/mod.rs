@@ -10,7 +10,7 @@ pub mod process;
 #[cfg(target_os = "macos")]
 pub mod vsock;
 
-use pelagos_protocol::{ContainerInfo, ImageInfo};
+use pelagos_protocol::{ContainerInfo, GuestMount, ImageInfo};
 use tokio::sync::mpsc::UnboundedSender;
 
 /// Errors returned by backend operations.
@@ -43,6 +43,7 @@ impl serde::Serialize for BackendError {
 /// All methods are async so both the subprocess backend (tokio::process) and
 /// the vsock backend (tokio net) implement them with the same interface.
 #[async_trait::async_trait]
+#[allow(clippy::too_many_arguments)]
 pub trait RuntimeBackend: Send + Sync + 'static {
     /// List all containers (running + exited).
     async fn list_containers(&self) -> Result<Vec<ContainerInfo>, BackendError>;
@@ -61,6 +62,11 @@ pub trait RuntimeBackend: Send + Sync + 'static {
     /// Start a container from `image`.  Each line of stdout/stderr is sent to
     /// `tx` as it arrives.  Returns the container process exit code (0 = success,
     /// or the container name when `detach` is true and the guest prints it).
+    ///
+    /// `mounts` contains pre-translated virtiofs mount specs (tag + subpath →
+    /// container_path).  The macOS vsock backend populates these by converting
+    /// host paths relative to `$HOME` (share0).  Paths outside `$HOME` are
+    /// rejected before this call.
     async fn run_container(
         &self,
         image: &str,
@@ -68,6 +74,7 @@ pub trait RuntimeBackend: Send + Sync + 'static {
         args: Vec<String>,
         detach: bool,
         ports: Vec<String>,
+        mounts: Vec<GuestMount>,
         tx: UnboundedSender<String>,
     ) -> Result<i32, BackendError>;
 

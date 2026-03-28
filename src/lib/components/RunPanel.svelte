@@ -21,6 +21,7 @@
   let nameInput = '';
   let cmdInput = '';
   let portsInput = '';
+  let volumesInput = '';
   let mode: 'background' | 'interactive' = 'background';
 
   let running = false;
@@ -34,12 +35,13 @@
       const args = cmdInput.trim() ? cmdInput.trim().split(/\s+/) : [];
       const name = nameInput.trim() || null;
       const ports = portsInput.trim() ? portsInput.trim().split(/[\s,]+/) : [];
+      const volumes = volumesInput.trim() ? volumesInput.trim().split(/[\s,]+/) : [];
       if (mode === 'interactive') {
-        await launchInteractive(image.trim(), name, args, ports);
+        await launchInteractive(image.trim(), name, args, ports, volumes);
         // Terminal window opened — close panel, container will appear once it starts
         dispatch('done');
       } else {
-        await runContainer(image.trim(), name, args, ports);
+        await runContainer(image.trim(), name, args, ports, volumes);
         dispatch('done');
       }
     } catch (e) {
@@ -61,7 +63,7 @@
     />
     <datalist id="run-image-list">
       {#each imageRefs as ref}
-        <option value={ref} />
+        <option value={ref}></option>
       {/each}
     </datalist>
     <input
@@ -74,12 +76,6 @@
       class="input wide"
       placeholder={mode === 'interactive' ? 'Command  (e.g. /bin/sh)' : 'Command  (e.g. sleep 60)'}
       bind:value={cmdInput}
-      disabled={running}
-    />
-    <input
-      class="input"
-      placeholder="Ports  (e.g. 8080:80)"
-      bind:value={portsInput}
       disabled={running}
     />
 
@@ -102,6 +98,20 @@
       {running ? '…' : mode === 'interactive' ? 'Open terminal' : 'Run'}
     </button>
     <button class="btn ghost" on:click={() => dispatch('done')} disabled={running}>✕</button>
+  </div>
+  <div class="row">
+    <input
+      class="input"
+      placeholder="Ports  (e.g. 8080:80)"
+      bind:value={portsInput}
+      disabled={running}
+    />
+    <input
+      class="input wide"
+      placeholder="Volumes  (e.g. ~/Projects/mysite:/srv)"
+      bind:value={volumesInput}
+      disabled={running}
+    />
   </div>
   {#if error}<div class="err">{error}</div>{/if}
 </div>
