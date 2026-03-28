@@ -17,6 +17,15 @@ use tokio::net::UnixStream;
 use tokio::sync::mpsc::UnboundedSender;
 use tokio::time::timeout;
 
+/// Parse a `HOST:CONTAINER` port-forward spec into `(host_port, container_port)`.
+/// Returns `None` if the spec is not in the expected format.
+fn parse_port_spec(spec: &str) -> Option<(u16, u16)> {
+    let (host_str, container_str) = spec.split_once(':')?;
+    let host: u16 = host_str.parse().ok()?;
+    let container: u16 = container_str.parse().ok()?;
+    Some((host, container))
+}
+
 pub fn default_socket_path() -> PathBuf {
     // pelagos-mac daemon socket: ~/.local/share/pelagos/vm.sock
     // This matches StateDir::open_profile("default") in pelagos-mac.
@@ -55,6 +64,36 @@ impl VsockBackend {
                 BackendError::Io(e)
             }
         })
+    }
+
+    /// Register a macOS-side port forward with the pelagos-mac daemon.
+    ///
+    /// Sends `DaemonCmd::RegisterPort` to the daemon socket.  The daemon
+    /// handles this locally (no vsock trip) by binding `0.0.0.0:host_port`
+    /// and relaying accepted connections through the NAT relay into the VM.
+    /// The subscription watcher in the daemon auto-deregisters ports when the
+    /// associated container exits.
+    async fn register_port(&self, host_port: u16, container_port: u16) -> Result<(), BackendError> {
+        let mut stream = self.connect().await?;
+        let msg = format!(
+            "{{\"RegisterPort\":{{\"host_port\":{host_port},\"container_port\":{container_port}}}}}\n"
+        );
+        stream
+            .write_all(msg.as_bytes())
+            .await
+            .map_err(BackendError::Io)?;
+        // Read the one-line DaemonResponse: {"status":"ok"} or {"status":"err",...}
+        let mut reader = BufReader::new(stream);
+        let mut line = String::new();
+        reader
+            .read_line(&mut line)
+            .await
+            .map_err(BackendError::Io)?;
+        let line = line.trim();
+        if line.contains("\"err\"") {
+            log::warn!("port {host_port}:{container_port} registration: {line}");
+        }
+        Ok(())
     }
 
     /// Send one command, collect all stdout, return it.
@@ -139,6 +178,18 @@ impl RuntimeBackend for VsockBackend {
         ports: Vec<String>,
         tx: UnboundedSender<String>,
     ) -> Result<i32, BackendError> {
+        // Register macOS-side port listeners with the pelagos-mac daemon BEFORE
+        // sending the guest run command.  Both are required for end-to-end forwarding:
+        //   macOS:host_port → daemon PortDispatcher → NAT relay → VM:host_port
+        //   VM:host_port ← pasta -t host_port:container_port ← container:container_port
+        if !ports.is_empty() {
+            for spec in &ports {
+                if let Some((host, container)) = parse_port_spec(spec) {
+                    let _ = self.register_port(host, container).await;
+                }
+            }
+        }
+
         let network = if ports.is_empty() {
             None
         } else {

@@ -28,10 +28,10 @@ pub fn open_in_terminal(
     }
     if !ports.is_empty() {
         for p in ports {
-            parts.push("--publish".into());
+            parts.push("-p".into());
             parts.push(shell_quote(p));
         }
-        parts.push("--network".into());
+        parts.push("-n".into());
         parts.push("pasta".into());
     }
     parts.push(shell_quote(image));
