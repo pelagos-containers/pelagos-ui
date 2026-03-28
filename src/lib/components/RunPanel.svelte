@@ -108,7 +108,7 @@
     />
     <input
       class="input wide"
-      placeholder="Volumes  (e.g. ~/mysite:/usr/share/nginx/html)"
+      placeholder="Volumes  (e.g. ~/Projects/mysite:/srv)"
       bind:value={volumesInput}
       disabled={running}
     />

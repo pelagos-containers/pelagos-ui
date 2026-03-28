@@ -99,12 +99,20 @@ fn parse_volumes(specs: &[String]) -> Result<Vec<GuestMount>, BackendError> {
                 "invalid volume spec {spec:?}: expected HOST:CONTAINER or HOST:CONTAINER:ro"
             )));
         }
-        let host_path = std::path::Path::new(parts[0]);
+        let raw = parts[0];
+        let expanded = if let Some(rest) = raw.strip_prefix("~/") {
+            home.join(rest)
+        } else if raw == "~" {
+            home.clone()
+        } else {
+            std::path::PathBuf::from(raw)
+        };
+        let host_path = expanded.as_path();
         let container_path = parts[1].to_string();
         let read_only = parts.get(2).map(|s| *s == "ro").unwrap_or(false);
         if !host_path.is_absolute() {
             return Err(BackendError::Other(format!(
-                "volume host path {host_path:?} must be absolute"
+                "volume host path {raw:?} must be absolute (or start with ~/)"
             )));
         }
         let subpath = host_path.strip_prefix(&home).map_err(|_| {
