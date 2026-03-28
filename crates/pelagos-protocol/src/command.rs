@@ -176,4 +176,37 @@ pub enum GuestCommand {
     ///
     /// Guest replies with `Exit` (exit code 0 = success).
     ImageRm { reference: String },
+
+    /// Proxy a `pelagos compose` subcommand to the VM guest.
+    ///
+    /// The compose file and all relative bind-mount paths must be accessible
+    /// inside the VM.  On macOS, `$HOME` is always mounted as virtiofs `share0`
+    /// at `/mnt/share0`; the macOS CLI translates host paths before sending
+    /// this command.  `working_dir` is the parent directory of `file` in the VM
+    /// so that relative paths inside the compose file resolve correctly.
+    ///
+    /// Guest replies with streamed stdout/stderr followed by
+    /// [`crate::response::GuestResponse::Exit`].  For `up` (daemonised), the
+    /// stream ends quickly.  For `up --foreground` or `logs --follow`, the
+    /// stream continues until the client disconnects or the stack stops.
+    ///
+    /// ## Wire example
+    ///
+    /// ```json
+    /// {"cmd":"compose","subcommand":"up","file":"/mnt/share0/Projects/foo/compose.reml","working_dir":"/mnt/share0/Projects/foo"}
+    /// ```
+    Compose {
+        /// Compose subcommand: `"up"`, `"down"`, `"ps"`, or `"logs"`.
+        subcommand: String,
+        /// Absolute path to the `.reml` file inside the VM.
+        file: String,
+        /// Working directory for the invocation (typically the directory containing `file`).
+        working_dir: String,
+        /// Optional project name override (`-p`).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        project: Option<String>,
+        /// Extra flags forwarded verbatim (e.g. `["--foreground"]`, `["--follow", "grafana"]`).
+        #[serde(default)]
+        args: Vec<String>,
+    },
 }
