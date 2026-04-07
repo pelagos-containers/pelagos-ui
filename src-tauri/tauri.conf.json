@@ -1,6 +1,6 @@
 {
   "productName": "Pelagos",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "identifier": "io.pelagos.ui",
   "build": {
     "beforeDevCommand": "npm run dev",
@@ -34,7 +34,10 @@
     ],
     "linux": {
       "deb": {
-        "depends": ["libayatana-appindicator3-1", "libwebkit2gtk-4.1-0"]
+        "depends": [
+          "libayatana-appindicator3-1",
+          "libwebkit2gtk-4.1-0"
+        ]
       }
     }
   }
