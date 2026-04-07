@@ -98,8 +98,7 @@ pub fn open_in_terminal(
 fn open_terminal_plist(cmd: &str) -> Result<(), String> {
     use std::io::Write;
 
-    let path = std::env::temp_dir()
-        .join(format!("pelagos-run-{}.terminal", std::process::id()));
+    let path = std::env::temp_dir().join(format!("pelagos-run-{}.terminal", std::process::id()));
 
     // Escape XML special characters in the command string.
     let xml_cmd = cmd
