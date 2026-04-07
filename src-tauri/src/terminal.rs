@@ -91,17 +91,22 @@ pub fn open_in_terminal(
 
 /// Open a new Terminal.app window and run cmd via osascript `do script`.
 ///
-/// `do script` bypasses login-shell initialisation entirely — Terminal opens
-/// a window and runs the command directly, so no interactive startup hook
-/// (oh-my-zsh auto-update, p10k instant-prompt, etc.) can interfere.
+/// oh-my-zsh (and similar plugins) intercept the first keystroke from the
+/// PTY during shell startup with `read -r -k 1` for their auto-update prompt.
+/// We prepend `:\n` to the command: `:` is consumed by that read (it is not
+/// `Y`, so the update is skipped), and `:` is also a valid POSIX no-op so if
+/// no prompt is active it executes harmlessly.  The real command follows on
+/// the next line.
 ///
-/// The app is not sandboxed, so macOS will show a one-time Automation
-/// permission prompt the first time; subsequent calls are silent.
+/// The app is not sandboxed, so macOS shows a one-time Automation permission
+/// prompt the first time; subsequent calls are silent.
 #[cfg(target_os = "macos")]
 fn osascript_terminal(cmd: &str) -> Result<(), String> {
+    // ":" & linefeed answers any single-char TTY prompt (oh-my-zsh update,
+    // p10k instant-prompt, etc.) then the real command runs on the next line.
     let script = format!(
         "tell application \"Terminal\"\n\
-         \tdo script \"{}\"\n\
+         \tdo script (\":\" & linefeed & \"{}\")\n\
          \tactivate\n\
          end tell",
         escape_applescript(cmd)
