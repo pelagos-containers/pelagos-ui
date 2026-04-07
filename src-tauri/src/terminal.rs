@@ -65,10 +65,11 @@ pub fn open_in_terminal(
             "ghostty" => spawn_generic("ghostty", &cmd),
             "kitty" => spawn_generic("kitty", &cmd),
             "alacritty" => spawn_generic("alacritty", &cmd),
-            // Apple Terminal, Warp, unknown: use .terminal plist — no
-            // Automation permission needed, works in any sandbox level,
-            // and bypasses login-shell interactive prompts (oh-my-zsh, etc.).
-            _ => open_terminal_plist(&cmd),
+            // Apple Terminal, Warp, unknown: use osascript do script.
+            // The app is not sandboxed so macOS will prompt once for
+            // Automation permission; after that it works without any
+            // login-shell initialisation (no oh-my-zsh interference).
+            _ => osascript_terminal(&cmd),
         }
     }
 
@@ -88,50 +89,25 @@ pub fn open_in_terminal(
     }
 }
 
-/// Write a `.terminal` plist to $TMPDIR and open it with Terminal.app.
+/// Open a new Terminal.app window and run cmd via osascript `do script`.
 ///
-/// Unlike `.command` files, `.terminal` plists are read by Terminal.app
-/// directly: the `CommandString` is executed with `RunCommandAsShell false`,
-/// so Terminal never starts a login shell and no interactive startup hook
+/// `do script` bypasses login-shell initialisation entirely — Terminal opens
+/// a window and runs the command directly, so no interactive startup hook
 /// (oh-my-zsh auto-update, p10k instant-prompt, etc.) can interfere.
+///
+/// The app is not sandboxed, so macOS will show a one-time Automation
+/// permission prompt the first time; subsequent calls are silent.
 #[cfg(target_os = "macos")]
-fn open_terminal_plist(cmd: &str) -> Result<(), String> {
-    use std::io::Write;
-
-    let path = std::env::temp_dir().join(format!("pelagos-run-{}.terminal", std::process::id()));
-
-    // Escape XML special characters in the command string.
-    let xml_cmd = cmd
-        .replace('&', "&amp;")
-        .replace('<', "&lt;")
-        .replace('>', "&gt;")
-        .replace('"', "&quot;");
-
-    let plist = format!(
-        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n\
-         <!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \
-         \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">\n\
-         <plist version=\"1.0\">\n\
-         <dict>\n\
-         \t<key>CommandString</key>\n\
-         \t<string>{}</string>\n\
-         \t<key>RunCommandAsShell</key>\n\
-         \t<false/>\n\
-         \t<key>name</key>\n\
-         \t<string>pelagos run</string>\n\
-         </dict>\n\
-         </plist>\n",
-        xml_cmd
+fn osascript_terminal(cmd: &str) -> Result<(), String> {
+    let script = format!(
+        "tell application \"Terminal\"\n\
+         \tdo script \"{}\"\n\
+         \tactivate\n\
+         end tell",
+        escape_applescript(cmd)
     );
-
-    let mut f = std::fs::File::create(&path).map_err(|e| e.to_string())?;
-    f.write_all(plist.as_bytes()).map_err(|e| e.to_string())?;
-    drop(f);
-
-    std::process::Command::new("open")
-        .arg("-a")
-        .arg("Terminal.app")
-        .arg(&path)
+    std::process::Command::new("osascript")
+        .args(["-e", &script])
         .spawn()
         .map(|_| ())
         .map_err(|e| e.to_string())
