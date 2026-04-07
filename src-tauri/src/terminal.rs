@@ -1,8 +1,15 @@
 //! Launch interactive container sessions in a new terminal window.
 //!
-//! macOS default: write a self-deleting `.command` file and `open` it.
-//! `.command` files are opened by Terminal.app without requiring the
-//! Automation permission that `osascript "do script"` demands.
+//! macOS default: write a `.terminal` plist and `open` it with Terminal.app.
+//! `.terminal` files are opened with `RunCommandAsShell false`, which bypasses
+//! login-shell initialisation (oh-my-zsh, p10k, etc.) entirely.
+//! This avoids the bug where an interactive startup prompt (e.g. oh-my-zsh
+//! auto-update: "Would you like to update? [Y/n]") reads the leading `/` of
+//! the command path from the PTY, leaving a broken relative path to execute.
+//!
+//! `.command` files were the previous approach; they require Terminal to send
+//! the path as keyboard input to the login shell, which is intercepted by any
+//! shell plugin that reads from the TTY during startup.
 //!
 //! iTerm / ghostty / kitty / alacritty: detected via $TERM_PROGRAM or
 //! $PELAGOS_TERMINAL override; launched via their own CLI flags.
@@ -58,9 +65,10 @@ pub fn open_in_terminal(
             "ghostty" => spawn_generic("ghostty", &cmd),
             "kitty" => spawn_generic("kitty", &cmd),
             "alacritty" => spawn_generic("alacritty", &cmd),
-            // Apple Terminal, Warp, unknown: use .command file — no
-            // Automation permission needed, works in any sandbox level.
-            _ => open_command_file(&cmd),
+            // Apple Terminal, Warp, unknown: use .terminal plist — no
+            // Automation permission needed, works in any sandbox level,
+            // and bypasses login-shell interactive prompts (oh-my-zsh, etc.).
+            _ => open_terminal_plist(&cmd),
         }
     }
 
@@ -80,27 +88,49 @@ pub fn open_in_terminal(
     }
 }
 
-/// Write a self-deleting `.command` file to /tmp and open it.
+/// Write a `.terminal` plist to $TMPDIR and open it with Terminal.app.
 ///
-/// macOS associates `.command` files with Terminal.app; `open` launches them
-/// without requiring the Automation entitlement that `osascript` needs.
-/// The script removes itself on startup so /tmp stays tidy.
+/// Unlike `.command` files, `.terminal` plists are read by Terminal.app
+/// directly: the `CommandString` is executed with `RunCommandAsShell false`,
+/// so Terminal never starts a login shell and no interactive startup hook
+/// (oh-my-zsh auto-update, p10k instant-prompt, etc.) can interfere.
 #[cfg(target_os = "macos")]
-fn open_command_file(cmd: &str) -> Result<(), String> {
+fn open_terminal_plist(cmd: &str) -> Result<(), String> {
     use std::io::Write;
-    use std::os::unix::fs::PermissionsExt;
 
-    let path = std::env::temp_dir().join(format!("pelagos-run-{}.command", std::process::id()));
+    let path = std::env::temp_dir().join(format!("pelagos-run-{}.terminal", std::process::id()));
+
+    // Escape XML special characters in the command string.
+    let xml_cmd = cmd
+        .replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;");
+
+    let plist = format!(
+        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n\
+         <!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \
+         \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">\n\
+         <plist version=\"1.0\">\n\
+         <dict>\n\
+         \t<key>CommandString</key>\n\
+         \t<string>{}</string>\n\
+         \t<key>RunCommandAsShell</key>\n\
+         \t<false/>\n\
+         \t<key>name</key>\n\
+         \t<string>pelagos run</string>\n\
+         </dict>\n\
+         </plist>\n",
+        xml_cmd
+    );
+
     let mut f = std::fs::File::create(&path).map_err(|e| e.to_string())?;
-    // Self-delete then exec the pelagos command so the terminal inherits it cleanly.
-    writeln!(f, "#!/bin/bash").map_err(|e| e.to_string())?;
-    writeln!(f, "rm -- \"$0\"").map_err(|e| e.to_string())?;
-    writeln!(f, "exec {}", cmd).map_err(|e| e.to_string())?;
+    f.write_all(plist.as_bytes()).map_err(|e| e.to_string())?;
     drop(f);
-    std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755))
-        .map_err(|e| e.to_string())?;
 
     std::process::Command::new("open")
+        .arg("-a")
+        .arg("Terminal.app")
         .arg(&path)
         .spawn()
         .map(|_| ())
