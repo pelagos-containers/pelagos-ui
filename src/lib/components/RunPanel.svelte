@@ -1,6 +1,6 @@
 <script lang="ts">
   import { createEventDispatcher, onMount } from 'svelte';
-  import { runContainer, launchInteractive, listImages } from '$lib/ipc';
+  import { runContainer, launchTerminalWindow, listImages } from '$lib/ipc';
 
   const dispatch = createEventDispatcher<{ done: void }>();
 
@@ -37,8 +37,8 @@
       const ports = portsInput.trim() ? portsInput.trim().split(/[\s,]+/) : [];
       const volumes = volumesInput.trim() ? volumesInput.trim().split(/[\s,]+/) : [];
       if (mode === 'interactive') {
-        await launchInteractive(image.trim(), name, args, ports, volumes);
-        // Terminal window opened — close panel, container will appear once it starts
+        await launchTerminalWindow(image.trim(), name, args, ports, volumes);
+        // Embedded terminal window opened — close panel, container will appear once running.
         dispatch('done');
       } else {
         await runContainer(image.trim(), name, args, ports, volumes);

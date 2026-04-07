@@ -1,6 +1,6 @@
 mod backend;
 mod commands;
-mod terminal;
+mod pty;
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -20,6 +20,7 @@ pub fn run() {
 
     tauri::Builder::default()
         .manage(backend)
+        .manage(pty::PtyState::new())
         .invoke_handler(tauri::generate_handler![
             commands::list_containers,
             commands::stop_container,
@@ -27,10 +28,14 @@ pub fn run() {
             commands::ping,
             commands::vm_status,
             commands::run_container,
-            commands::launch_interactive,
             commands::list_images,
             commands::pull_image,
             commands::remove_image,
+            pty::launch_terminal_window,
+            pty::pty_start,
+            pty::pty_input,
+            pty::pty_resize,
+            pty::pty_close,
         ])
         .setup(|app| {
             // Inject GTK CSS on Linux so the tray context menu has an opaque
@@ -126,18 +131,29 @@ pub fn run() {
             Ok(())
         })
         .on_window_event(|window, event| {
-            // On close: prevent the default close, then hide asynchronously.
-            // We must prevent_close() first (synchronous), then spawn the hide
-            // so we're not calling hide() inside the event callback — on Wayland
-            // calling hide() synchronously inside CloseRequested can panic.
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-                api.prevent_close();
-                let app = window.app_handle().clone();
-                tauri::async_runtime::spawn(async move {
-                    if let Some(win) = app.get_webview_window("main") {
-                        let _ = win.hide();
+                if window.label() == "main" {
+                    // Main window hides to the tray rather than closing.
+                    // prevent_close() must be called synchronously; the actual hide
+                    // is deferred because calling hide() inside the event handler
+                    // can panic on Wayland.
+                    api.prevent_close();
+                    let app = window.app_handle().clone();
+                    tauri::async_runtime::spawn(async move {
+                        if let Some(win) = app.get_webview_window("main") {
+                            let _ = win.hide();
+                        }
+                    });
+                } else {
+                    // Terminal windows close normally.  Drop the PTY session so
+                    // the master FD is closed, which sends SIGHUP to the child.
+                    let label = window.label().to_string();
+                    if let Some(state) = window.app_handle().try_state::<pty::PtyState>() {
+                        let mut map = state.0.lock().unwrap();
+                        map.sessions.remove(&label);
+                        map.pending.remove(&label);
                     }
-                });
+                }
             }
         })
         .run(tauri::generate_context!())
