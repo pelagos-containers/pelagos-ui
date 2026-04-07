@@ -93,15 +93,19 @@ pub fn launch_terminal_window(
 /// Allocate a PTY, spawn `pelagos run --tty --interactive`, and start bridging
 /// PTY output to `pty-output-<label>` Tauri events.
 ///
+/// Async so that the Tauri IPC thread (which also delivers events to WKWebView)
+/// is not blocked during PTY allocation and process spawn.  The blocking work
+/// runs in `tokio::task::spawn_blocking`.
+///
 /// Must be called after the terminal window has mounted xterm.js so that the
 /// initial output is not lost (xterm buffers writes before the DOM is ready, but
 /// we want the listener registered before we emit).
 ///
 /// Frontend: `await invoke('pty_start', { label })`
 #[tauri::command]
-pub fn pty_start(
+pub async fn pty_start(
     app: tauri::AppHandle,
-    state: tauri::State<PtyState>,
+    state: tauri::State<'_, PtyState>,
     label: String,
 ) -> Result<(), String> {
     // Take the pending params — error if the label is unknown or already started.
@@ -113,7 +117,7 @@ pub fn pty_start(
         .remove(&label)
         .ok_or_else(|| format!("no pending PTY for label {label}"))?;
 
-    // Build the pelagos command.
+    // Build the command args before entering spawn_blocking.
     let pelagos = find_pelagos_bin();
     let mut cmd = CommandBuilder::new(&pelagos);
     cmd.arg("run");
@@ -140,29 +144,45 @@ pub fn pty_start(
         cmd.arg(a);
     }
 
-    // Open the PTY pair.
-    let pty_system = NativePtySystem::default();
-    let pair = pty_system
-        .openpty(PtySize { rows: 24, cols: 80, pixel_width: 0, pixel_height: 0 })
-        .map_err(|e| e.to_string())?;
+    // PTY allocation and process spawn are blocking syscalls (openpty, fork,
+    // exec).  Run them on a dedicated blocking thread so the tokio runtime and
+    // Tauri's IPC/event delivery remain responsive.
+    type PtyHandles = (
+        Box<dyn portable_pty::MasterPty + Send>,
+        Box<dyn Write + Send>,
+        Box<dyn Read + Send>,
+        Box<dyn portable_pty::Child + Send + Sync>,
+    );
 
-    // Spawn the child on the slave side, then drop the slave — the master keeps
-    // the session alive.
-    let mut child = pair.slave.spawn_command(cmd).map_err(|e| e.to_string())?;
-    drop(pair.slave);
+    let (master, writer, reader, child): PtyHandles =
+        tokio::task::spawn_blocking(move || -> Result<PtyHandles, String> {
+            let pty_system = NativePtySystem::default();
+            let pair = pty_system
+                .openpty(PtySize { rows: 24, cols: 80, pixel_width: 0, pixel_height: 0 })
+                .map_err(|e| e.to_string())?;
 
-    let writer = pair.master.take_writer().map_err(|e| e.to_string())?;
-    let mut reader = pair.master.try_clone_reader().map_err(|e| e.to_string())?;
+            let child = pair.slave.spawn_command(cmd).map_err(|e| e.to_string())?;
+            drop(pair.slave);
+
+            let writer = pair.master.take_writer().map_err(|e| e.to_string())?;
+            let reader = pair.master.try_clone_reader().map_err(|e| e.to_string())?;
+            Ok((pair.master, writer, reader, child))
+        })
+        .await
+        .map_err(|e| e.to_string())??;
 
     // Store the session so resize and input commands can reach it.
-    state.0.lock().unwrap().sessions.insert(
-        label.clone(),
-        PtySession { master: pair.master, writer },
-    );
+    state
+        .0
+        .lock()
+        .unwrap()
+        .sessions
+        .insert(label.clone(), PtySession { master, writer });
 
     // Reader thread: PTY stdout → `pty-output-<label>` events.
     let app_r = app.clone();
     let label_r = label.clone();
+    let mut reader = reader;
     std::thread::spawn(move || {
         let mut buf = [0u8; 4096];
         loop {
@@ -181,6 +201,7 @@ pub fn pty_start(
     // Wait thread: reap the child process, then emit `pty-exit-<label>`.
     let app_w = app.clone();
     let label_w = label.clone();
+    let mut child = child;
     std::thread::spawn(move || {
         let code = child
             .wait()
