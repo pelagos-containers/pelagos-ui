@@ -1,0 +1,9 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "terminal",
+  "description": "Permissions for dynamically created terminal windows (label prefix terminal-).",
+  "windows": ["terminal-*"],
+  "permissions": [
+    "core:default"
+  ]
+}

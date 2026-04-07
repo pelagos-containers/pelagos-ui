@@ -154,24 +154,6 @@ fn parse_volumes(specs: &[String]) -> Result<Vec<GuestMount>, BackendError> {
         .collect())
 }
 
-/// Open a new terminal window running `pelagos run --tty --interactive image [cmd]`.
-/// Returns immediately — the terminal handles the session.
-///
-/// `volumes` is a list of `HOST:CONTAINER[:ro]` strings passed as `-v` flags
-/// to the pelagos-mac CLI, which handles the virtiofs translation itself.
-///
-/// Frontend: `await invoke('launch_interactive', { image, name, args, ports, volumes })`
-#[tauri::command]
-pub fn launch_interactive(
-    image: String,
-    name: Option<String>,
-    args: Vec<String>,
-    ports: Vec<String>,
-    volumes: Vec<String>,
-) -> Result<(), String> {
-    crate::terminal::open_in_terminal(&image, name.as_deref(), &args, &ports, &volumes)
-}
-
 /// Returns true if the runtime is reachable.
 ///
 /// Frontend: `await invoke('ping')`

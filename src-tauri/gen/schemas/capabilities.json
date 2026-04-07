@@ -1,1 +1,1 @@
-{}
+{"main":{"identifier":"main","description":"Permissions for the main dashboard window.","local":true,"windows":["main"],"permissions":["core:default"]},"terminal":{"identifier":"terminal","description":"Permissions for dynamically created terminal windows (label prefix terminal-).","local":true,"windows":["terminal-*"],"permissions":["core:default"]}}

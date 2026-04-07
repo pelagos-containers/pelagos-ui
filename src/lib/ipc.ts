@@ -25,8 +25,10 @@ export const removeContainer = (name: string, force: boolean)  => invoke<void>('
 export const ping            = ()                              => invoke<boolean>('ping');
 export const runContainer      = (image: string, name: string | null, args: string[], ports: string[], volumes: string[]) =>
   invoke<number>('run_container', { image, name, args, detach: true, ports, volumes });
-export const launchInteractive = (image: string, name: string | null, args: string[], ports: string[], volumes: string[]) =>
-  invoke<void>('launch_interactive', { image, name, args, ports, volumes });
+/// Open an embedded terminal window for `pelagos run --tty --interactive`.
+/// Returns the window label (a UUID-suffixed string like "terminal-abc123").
+export const launchTerminalWindow = (image: string, name: string | null, args: string[], ports: string[], volumes: string[]) =>
+  invoke<string>('launch_terminal_window', { image, name, args, ports, volumes });
 
 export interface ImageInfo {
   reference: string;
