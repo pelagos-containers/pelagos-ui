@@ -71,12 +71,16 @@ pub fn launch_terminal_window(
     let label = format!("terminal-{}", uuid::Uuid::new_v4().simple());
 
     // Park the params until the window calls pty_start.
-    state
-        .0
-        .lock()
-        .unwrap()
-        .pending
-        .insert(label.clone(), PtyParams { image: image.clone(), name, args, ports, volumes });
+    state.0.lock().unwrap().pending.insert(
+        label.clone(),
+        PtyParams {
+            image: image.clone(),
+            name,
+            args,
+            ports,
+            volumes,
+        },
+    );
 
     let url = WebviewUrl::App(format!("/terminal?label={}", label).into());
     WebviewWindowBuilder::new(&app, &label, url)
@@ -158,7 +162,12 @@ pub async fn pty_start(
         tokio::task::spawn_blocking(move || -> Result<PtyHandles, String> {
             let pty_system = NativePtySystem::default();
             let pair = pty_system
-                .openpty(PtySize { rows: 24, cols: 80, pixel_width: 0, pixel_height: 0 })
+                .openpty(PtySize {
+                    rows: 24,
+                    cols: 80,
+                    pixel_width: 0,
+                    pixel_height: 0,
+                })
                 .map_err(|e| e.to_string())?;
 
             let child = pair.slave.spawn_command(cmd).map_err(|e| e.to_string())?;
@@ -189,10 +198,7 @@ pub async fn pty_start(
             match reader.read(&mut buf) {
                 Ok(0) | Err(_) => break,
                 Ok(n) => {
-                    let _ = app_r.emit(
-                        &format!("pty-output-{}", label_r),
-                        buf[..n].to_vec(),
-                    );
+                    let _ = app_r.emit(&format!("pty-output-{}", label_r), buf[..n].to_vec());
                 }
             }
         }
@@ -203,10 +209,7 @@ pub async fn pty_start(
     let label_w = label.clone();
     let mut child = child;
     std::thread::spawn(move || {
-        let code = child
-            .wait()
-            .map(|s| s.exit_code() as i32)
-            .unwrap_or(0);
+        let code = child.wait().map(|s| s.exit_code() as i32).unwrap_or(0);
         let _ = app_w.emit(&format!("pty-exit-{}", label_w), code);
     });
 
@@ -247,7 +250,12 @@ pub fn pty_resize(
         .ok_or_else(|| format!("no PTY session for label {label}"))?;
     session
         .master
-        .resize(PtySize { rows, cols, pixel_width: 0, pixel_height: 0 })
+        .resize(PtySize {
+            rows,
+            cols,
+            pixel_width: 0,
+            pixel_height: 0,
+        })
         .map_err(|e| e.to_string())
 }
 
