@@ -1,8 +1,8 @@
 //! Launch interactive container sessions in a new terminal window.
 //!
-//! macOS default: write a self-deleting `.terminal` plist and `open` it.
-//! `.terminal` files are opened by Terminal.app with `RunCommandAsShell false`,
-//! which bypasses login-shell initialisation (oh-my-zsh, p10k, etc.) entirely.
+//! macOS default: write a `.terminal` plist and `open` it with Terminal.app.
+//! `.terminal` files are opened with `RunCommandAsShell false`, which bypasses
+//! login-shell initialisation (oh-my-zsh, p10k, etc.) entirely.
 //! This avoids the bug where an interactive startup prompt (e.g. oh-my-zsh
 //! auto-update: "Would you like to update? [Y/n]") reads the leading `/` of
 //! the command path from the PTY, leaving a broken relative path to execute.
@@ -84,19 +84,16 @@ pub fn open_in_terminal(
                 return spawn_generic(term, &cmd);
             }
         }
-        Err("no terminal emulator found \xe2\x80\x94 set $PELAGOS_TERMINAL".into())
+        Err("no terminal emulator found — set $PELAGOS_TERMINAL".into())
     }
 }
 
-/// Write a `.terminal` plist to /tmp and open it with Terminal.app.
+/// Write a `.terminal` plist to $TMPDIR and open it with Terminal.app.
 ///
 /// Unlike `.command` files, `.terminal` plists are read by Terminal.app
 /// directly: the `CommandString` is executed with `RunCommandAsShell false`,
 /// so Terminal never starts a login shell and no interactive startup hook
 /// (oh-my-zsh auto-update, p10k instant-prompt, etc.) can interfere.
-///
-/// The plist sets `RunCommandAsShell` to false so Terminal exec\'s the
-/// command directly; a trailing `; exit` wrapper is not needed.
 #[cfg(target_os = "macos")]
 fn open_terminal_plist(cmd: &str) -> Result<(), String> {
     use std::io::Write;
@@ -104,27 +101,27 @@ fn open_terminal_plist(cmd: &str) -> Result<(), String> {
     let path = std::env::temp_dir()
         .join(format!("pelagos-run-{}.terminal", std::process::id()));
 
-    // Escape for XML: the command may contain <, >, &, \' or ".
+    // Escape XML special characters in the command string.
     let xml_cmd = cmd
-        .replace(\'&\', "&amp;")
-        .replace(\'<\', "&lt;")
-        .replace(\'>\', "&gt;")
-        .replace(\'\"\', "&quot;");
+        .replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;");
 
     let plist = format!(
-        r#"<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-\t<key>CommandString</key>
-\t<string>{}</string>
-\t<key>RunCommandAsShell</key>
-\t<false/>
-\t<key>name</key>
-\t<string>pelagos run</string>
-</dict>
-</plist>
-"#,
+        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n\
+         <!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \
+         \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">\n\
+         <plist version=\"1.0\">\n\
+         <dict>\n\
+         \t<key>CommandString</key>\n\
+         \t<string>{}</string>\n\
+         \t<key>RunCommandAsShell</key>\n\
+         \t<false/>\n\
+         \t<key>name</key>\n\
+         \t<string>pelagos run</string>\n\
+         </dict>\n\
+         </plist>\n",
         xml_cmd
     );
 
@@ -179,10 +176,10 @@ fn find_pelagos_bin() -> String {
 
 #[cfg(target_os = "macos")]
 fn escape_applescript(s: &str) -> String {
-    s.replace(\'\\\', "\\\\\\\\").replace(\'"\', "\\\\\"")
+    s.replace('\\', "\\\\").replace('"', "\\\"")
 }
 
 /// Single-quote a shell argument, escaping any embedded single quotes.
 fn shell_quote(s: &str) -> String {
-    format!("\'{}\'" , s.replace(\'\\'\', "\'\\\'\'" ))
+    format!("'{}'", s.replace('\'', "'\\''"))
 }
