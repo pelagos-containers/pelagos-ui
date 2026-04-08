@@ -4,8 +4,10 @@
   import type { ContainerInfo } from '../ipc';
 
   export let container: ContainerInfo;
+  export let editMode = false;
+  export let checked = false;
 
-  const dispatch = createEventDispatcher<{ stop: string; remove: string }>();
+  const dispatch = createEventDispatcher<{ stop: string; remove: string; toggle: string }>();
 
   function age(iso: string): string {
     const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
@@ -20,9 +22,21 @@
     const s = container.command.join(' ');
     return s.length > MAX_CMD ? s.slice(0, MAX_CMD - 1) + '…' : s;
   })();
+
+  $: selectable = editMode && container.status === 'exited';
+  $: muted = editMode && container.status === 'running';
 </script>
 
-<tr>
+<tr class:muted class:selectable>
+  <td class="check-col">
+    {#if selectable}
+      <input
+        type="checkbox"
+        checked={checked}
+        on:change={() => dispatch('toggle', container.name)}
+      />
+    {/if}
+  </td>
   <td class="name">{container.name}</td>
   <td><StatusBadge status={container.status} /></td>
   <td class="mono">{container.image ?? container.rootfs}</td>
@@ -30,10 +44,14 @@
   <td class="dim">{age(container.started_at)}</td>
   <td class="pid dim">{container.pid > 0 ? container.pid : '—'}</td>
   <td class="actions">
-    {#if container.status === 'running'}
+    {#if !editMode}
+      {#if container.status === 'running'}
+        <button on:click={() => dispatch('stop', container.name)}>Stop</button>
+      {/if}
+      <button class="danger" on:click={() => dispatch('remove', container.name)}>Remove</button>
+    {:else if container.status === 'running'}
       <button on:click={() => dispatch('stop', container.name)}>Stop</button>
     {/if}
-    <button class="danger" on:click={() => dispatch('remove', container.name)}>Remove</button>
   </td>
 </tr>
 
@@ -44,6 +62,22 @@
   .name   { font-weight: 600; }
   .pid    { text-align: right; font-family: ui-monospace, monospace; font-size: 0.82em; }
   .actions { display: flex; gap: 6px; justify-content: flex-end; }
+
+  .check-col {
+    width: 32px;
+    padding: 9px 4px 9px 12px;
+  }
+  .check-col input[type="checkbox"] {
+    cursor: pointer;
+    width: 15px;
+    height: 15px;
+    accent-color: #3b82f6;
+  }
+
+  tr.muted td { opacity: 0.35; }
+  tr.selectable { cursor: pointer; }
+  tr.selectable:hover td { background: #0d1117; }
+
   button {
     padding: 3px 10px;
     border-radius: 4px;
