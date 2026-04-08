@@ -10,6 +10,12 @@
 
   // Filter + sort state
   let runningOnly = true;
+
+  // Edit / bulk-remove state
+  let editMode = false;
+  let selected: Set<string> = new Set();
+  let prevRunningOnly = true;
+  let removing = false;
   type SortCol = 'name' | 'status' | 'image' | 'command' | 'started_at' | 'pid';
   let sortCol: SortCol = 'started_at';
   let sortAsc = false; // default: newest first
@@ -70,6 +76,36 @@
     if (sortCol !== col) return '';
     return sortAsc ? ' ▲' : ' ▼';
   }
+
+  function enterEditMode() {
+    prevRunningOnly = runningOnly;
+    runningOnly = false;
+    selected = new Set($containers.filter(c => c.status === 'exited').map(c => c.name));
+    editMode = true;
+  }
+
+  function cancelEdit() {
+    editMode = false;
+    selected = new Set();
+    runningOnly = prevRunningOnly;
+  }
+
+  function toggleSelected(name: string) {
+    const next = new Set(selected);
+    if (next.has(name)) next.delete(name); else next.add(name);
+    selected = next;
+  }
+
+  async function removeSelected() {
+    removing = true;
+    for (const name of selected) {
+      try { await removeContainer(name, false); } catch (e) { error.set(String(e)); }
+    }
+    removing = false;
+    editMode = false;
+    selected = new Set();
+    runningOnly = prevRunningOnly;
+  }
 </script>
 
 <div class="app">
@@ -78,14 +114,22 @@
     <h1>Pelagos</h1>
     {#if $loading}<span class="hint">loading…</span>{/if}
     {#if $error}<span class={$error === 'VM stopped' ? 'hint' : 'err'}>{$error}</span>{/if}
-    <button
-      class="filter-btn"
-      class:active={runningOnly}
-      on:click={() => (runningOnly = !runningOnly)}
-      title={runningOnly ? 'Showing running only — click to show all' : 'Showing all — click to show running only'}
-    >
-      {runningOnly ? 'Running' : 'All'}
-    </button>
+    {#if !editMode}
+      <button
+        class="filter-btn"
+        class:active={runningOnly}
+        on:click={() => (runningOnly = !runningOnly)}
+        title={runningOnly ? 'Showing running only — click to show all' : 'Showing all — click to show running only'}
+      >{runningOnly ? 'Running' : 'All'}</button>
+      {#if exitedCount > 0}
+        <button class="edit-btn" on:click={enterEditMode}>Edit</button>
+      {/if}
+    {:else}
+      <button class="remove-btn" on:click={removeSelected} disabled={removing || selected.size === 0}>
+        {removing ? 'Removing…' : `Remove selected (${selected.size})`}
+      </button>
+      <button class="cancel-btn" on:click={cancelEdit} disabled={removing}>Cancel</button>
+    {/if}
   </header>
 
   <!-- ── two-pane layout ─────────────────────────────────────────────────── -->
@@ -105,6 +149,7 @@
         <table>
           <thead>
             <tr>
+              <th class="check-th"></th>
               <th><button class="sort-btn" on:click={() => setSort('name')}>Name{indicator('name')}</button></th>
               <th><button class="sort-btn" on:click={() => setSort('status')}>Status{indicator('status')}</button></th>
               <th><button class="sort-btn" on:click={() => setSort('image')}>Image{indicator('image')}</button></th>
@@ -118,8 +163,11 @@
             {#each sorted as c (c.name)}
               <ContainerRow
                 container={c}
+                {editMode}
+                checked={selected.has(c.name)}
                 on:stop={e => handleStop(e.detail)}
                 on:remove={e => handleRemove(e.detail)}
+                on:toggle={e => toggleSelected(e.detail)}
               />
             {/each}
           </tbody>
@@ -182,6 +230,43 @@
   }
   .filter-btn:hover  { border-color: #6b7280; color: #f0f0f0; }
   .filter-btn.active { border-color: #3b82f6; color: #93c5fd; }
+
+  .edit-btn {
+    background: transparent;
+    border: 1px solid #374151;
+    border-radius: 4px;
+    color: #9ca3af;
+    cursor: pointer;
+    font-size: 0.75rem;
+    padding: 2px 10px;
+  }
+  .edit-btn:hover { border-color: #6b7280; color: #f0f0f0; }
+
+  .remove-btn {
+    background: #7f1d1d;
+    border: 1px solid #991b1b;
+    border-radius: 4px;
+    color: #fca5a5;
+    cursor: pointer;
+    font-size: 0.75rem;
+    padding: 2px 12px;
+  }
+  .remove-btn:hover:not(:disabled) { background: #991b1b; }
+  .remove-btn:disabled { opacity: 0.5; cursor: default; }
+
+  .cancel-btn {
+    background: transparent;
+    border: 1px solid #374151;
+    border-radius: 4px;
+    color: #9ca3af;
+    cursor: pointer;
+    font-size: 0.75rem;
+    padding: 2px 10px;
+  }
+  .cancel-btn:hover:not(:disabled) { border-color: #6b7280; color: #f0f0f0; }
+  .cancel-btn:disabled { opacity: 0.5; cursor: default; }
+
+  .check-th { width: 32px; padding: 0 4px 0 12px; }
 
   /* two-pane layout */
   .layout {
