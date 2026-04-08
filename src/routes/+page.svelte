@@ -2,15 +2,11 @@
   import { onDestroy, onMount } from 'svelte';
   import { containers, loading, error, startPolling } from '$lib/stores/containers';
   import ContainerRow from '$lib/components/ContainerRow.svelte';
-  import RunPanel from '$lib/components/RunPanel.svelte';
-  import ImagesView from '$lib/components/ImagesView.svelte';
+  import ImagePane from '$lib/components/ImagePane.svelte';
   import { stopContainer, removeContainer } from '$lib/ipc';
   import type { ContainerInfo } from '$lib/ipc';
 
   let stopPolling: () => void;
-  let showRun = false;
-  let showImages = false;
-  let runPrefill = '';
 
   // Filter + sort state
   let runningOnly = true;
@@ -42,7 +38,7 @@
       sortAsc = !sortAsc;
     } else {
       sortCol = col;
-      sortAsc = col !== 'started_at'; // age defaults descending; others ascending
+      sortAsc = col !== 'started_at';
     }
   }
 
@@ -77,6 +73,7 @@
 </script>
 
 <div class="app">
+  <!-- ── header ──────────────────────────────────────────────────────────── -->
   <header>
     <h1>Pelagos</h1>
     {#if $loading}<span class="hint">loading…</span>{/if}
@@ -89,51 +86,59 @@
     >
       {runningOnly ? 'Running' : 'All'}
     </button>
-    <button class="run-btn" on:click={() => { runPrefill = ''; showRun = !showRun; showImages = false; }}>+ Run</button>
-    <button class="run-btn" on:click={() => { showImages = !showImages; showRun = false; }}>Images</button>
   </header>
 
-  {#if showRun}
-    <RunPanel prefillImage={runPrefill} on:done={() => (showRun = false)} />
-  {/if}
+  <!-- ── two-pane layout ─────────────────────────────────────────────────── -->
+  <div class="layout">
 
-  {#if showImages}
-    <ImagesView
-      on:close={() => (showImages = false)}
-      on:run={e => { runPrefill = e.detail; showImages = false; showRun = true; }}
-    />
-  {/if}
+    <!-- top pane: containers -->
+    <div class="pane containers-pane">
+      {#if !$loading && sorted.length === 0}
+        {#if runningOnly && exitedCount > 0}
+          <p class="empty">No running containers — {exitedCount} exited.
+            <button class="link-btn" on:click={() => (runningOnly = false)}>Show all</button>
+          </p>
+        {:else}
+          <p class="empty">No containers yet.</p>
+        {/if}
+      {:else}
+        <table>
+          <thead>
+            <tr>
+              <th><button class="sort-btn" on:click={() => setSort('name')}>Name{indicator('name')}</button></th>
+              <th><button class="sort-btn" on:click={() => setSort('status')}>Status{indicator('status')}</button></th>
+              <th><button class="sort-btn" on:click={() => setSort('image')}>Image{indicator('image')}</button></th>
+              <th><button class="sort-btn" on:click={() => setSort('command')}>Command{indicator('command')}</button></th>
+              <th><button class="sort-btn" on:click={() => setSort('started_at')}>Age{indicator('started_at')}</button></th>
+              <th><button class="sort-btn" on:click={() => setSort('pid')}>PID{indicator('pid')}</button></th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {#each sorted as c (c.name)}
+              <ContainerRow
+                container={c}
+                on:stop={e => handleStop(e.detail)}
+                on:remove={e => handleRemove(e.detail)}
+              />
+            {/each}
+          </tbody>
+        </table>
+      {/if}
+    </div>
 
-  {#if !$loading && sorted.length === 0}
-    {#if runningOnly && exitedCount > 0}
-      <p class="empty">No running containers — {exitedCount} exited.  <button class="link-btn" on:click={() => (runningOnly = false)}>Show all</button></p>
-    {:else}
-      <p class="empty">No containers.  Run <code>pelagos run &lt;image&gt;</code> to start one.</p>
-    {/if}
-  {:else}
-    <table>
-      <thead>
-        <tr>
-          <th><button class="sort-btn" on:click={() => setSort('name')}>Name{indicator('name')}</button></th>
-          <th><button class="sort-btn" on:click={() => setSort('status')}>Status{indicator('status')}</button></th>
-          <th><button class="sort-btn" on:click={() => setSort('image')}>Image{indicator('image')}</button></th>
-          <th><button class="sort-btn" on:click={() => setSort('command')}>Command{indicator('command')}</button></th>
-          <th><button class="sort-btn" on:click={() => setSort('started_at')}>Age{indicator('started_at')}</button></th>
-          <th><button class="sort-btn" on:click={() => setSort('pid')}>PID{indicator('pid')}</button></th>
-          <th></th>
-        </tr>
-      </thead>
-      <tbody>
-        {#each sorted as c (c.name)}
-          <ContainerRow
-            container={c}
-            on:stop={e => handleStop(e.detail)}
-            on:remove={e => handleRemove(e.detail)}
-          />
-        {/each}
-      </tbody>
-    </table>
-  {/if}
+    <!-- divider -->
+    <div class="pane-divider"></div>
+
+    <!-- bottom pane: images -->
+    <div class="pane image-pane">
+      <div class="pane-header">
+        <span class="pane-title">Images</span>
+      </div>
+      <ImagePane />
+    </div>
+
+  </div>
 </div>
 
 <p class="attribution">Photo: Jeri Leandera (CC BY-SA)</p>
@@ -150,23 +155,23 @@
     font-family: system-ui, -apple-system, sans-serif;
     font-size: 14px;
   }
-  .app    { padding: 20px 24px; }
-  header  { display: flex; align-items: baseline; gap: 16px; margin-bottom: 20px; }
+
+  .app    { display: flex; flex-direction: column; height: 100vh; padding: 0; overflow: hidden; }
+
+  header  {
+    display: flex;
+    align-items: baseline;
+    gap: 16px;
+    padding: 16px 24px 12px;
+    flex-shrink: 0;
+    border-bottom: 1px solid #1f2937;
+  }
   h1      { margin: 0; font-size: 1.1rem; font-weight: 700; letter-spacing: -0.01em; }
   .hint   { color: #6b7280; font-size: 0.8rem; }
   .err    { color: #f87171; font-size: 0.8rem; }
-  .run-btn {
-    margin-left: auto;
-    background: #238636;
-    border: none;
-    border-radius: 4px;
-    color: #fff;
-    cursor: pointer;
-    font-size: 0.8rem;
-    padding: 3px 12px;
-  }
-  .run-btn:hover { background: #2ea043; }
+
   .filter-btn {
+    margin-left: auto;
     background: transparent;
     border: 1px solid #374151;
     border-radius: 4px;
@@ -177,6 +182,43 @@
   }
   .filter-btn:hover  { border-color: #6b7280; color: #f0f0f0; }
   .filter-btn.active { border-color: #3b82f6; color: #93c5fd; }
+
+  /* two-pane layout */
+  .layout {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .pane { overflow-y: auto; }
+  .containers-pane {
+    flex: 1 1 0;
+    min-height: 80px;
+    padding: 8px 24px;
+  }
+  .pane-divider {
+    height: 1px;
+    background: #30363d;
+    flex-shrink: 0;
+  }
+  .image-pane {
+    flex: 1 1 0;
+    min-height: 180px;
+  }
+  .pane-header {
+    display: flex;
+    align-items: center;
+    padding: 10px 24px 0;
+  }
+  .pane-title {
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #6b7280;
+  }
+
+  /* container table */
   .link-btn {
     background: none;
     border: none;
@@ -186,21 +228,7 @@
     padding: 0;
     text-decoration: underline;
   }
-  .empty  { color: #6b7280; margin-top: 40px; text-align: center; }
-  code    { font-family: monospace; background: #1f2937; padding: 1px 5px; border-radius: 3px; }
-  .attribution {
-    position: fixed;
-    bottom: 8px;
-    right: 12px;
-    font-size: 0.65rem;
-    color: rgba(255, 255, 255, 0.45);
-    pointer-events: none;
-    user-select: none;
-  }
-  .attribution-left {
-    right: unset;
-    left: 12px;
-  }
+  .empty  { color: #6b7280; margin-top: 24px; text-align: center; }
   table   { width: 100%; border-collapse: collapse; }
   th {
     text-align: left;
@@ -225,4 +253,18 @@
     text-align: left;
   }
   .sort-btn:hover { color: #f0f0f0; }
+
+  .attribution {
+    position: fixed;
+    bottom: 8px;
+    right: 12px;
+    font-size: 0.65rem;
+    color: rgba(255, 255, 255, 0.45);
+    pointer-events: none;
+    user-select: none;
+  }
+  .attribution-left {
+    right: unset;
+    left: 12px;
+  }
 </style>
