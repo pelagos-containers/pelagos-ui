@@ -240,10 +240,16 @@
         <span class="meta">{shortDigest(img.digest)}</span>
         <span class="meta layers">{img.layers.length} layers</span>
         <button
+          class="btn run-hover-btn"
+          on:click|stopPropagation={() => select(img.reference)}
+          disabled={busy}
+        >Run ▶</button>
+        <button
           class="btn ghost sm remove-btn"
           on:click|stopPropagation={() => { confirmRef = img.reference; removeError = ''; }}
           disabled={busy}
-        >Remove</button>
+          title="Remove image"
+        >×</button>
       </div>
 
       {#if selectedRef === img.reference}
@@ -354,9 +360,26 @@
     padding: 1px 7px;
     white-space: nowrap;
   }
-  .remove-btn { opacity: 0; }
-  .image-row:hover .remove-btn,
-  .image-row.selected .remove-btn { opacity: 1; }
+  .run-hover-btn {
+    opacity: 0;
+    padding: 2px 10px;
+    font-size: 0.72rem;
+    background: #1a3a2a;
+    border: 1px solid #2ea043;
+    color: #3fb950;
+  }
+  .run-hover-btn:hover:not(:disabled) { background: #1f4d35; }
+  .image-row:hover .run-hover-btn { opacity: 1; }
+
+  .remove-btn {
+    opacity: 0;
+    padding: 1px 6px;
+    font-size: 0.78rem;
+    color: #6e7681;
+    border-color: transparent;
+  }
+  .remove-btn:hover:not(:disabled) { color: #f87171; border-color: #6e3030; background: #1a0a0a; }
+  .image-row:hover .remove-btn { opacity: 1; }
 
   /* ── inline run form ────────────────────────────────────────────────────── */
   .expansion {
