@@ -41,6 +41,11 @@ jobs:
           VERSION="$(python3 -c "import json,sys; print(json.load(open('src-tauri/tauri.conf.json'))['version'])")"
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
 
+      # TODO: sign + notarize before creating release (epic pelagos-containers/pelagos-mac#225)
+      # codesign --sign "Developer ID Application: ..." --deep --force Pelagos.app
+      # xcrun notarytool submit Pelagos_${VERSION}_aarch64.dmg --wait
+      # xcrun stapler staple Pelagos_${VERSION}_aarch64.dmg
+
       - name: Create GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -50,4 +55,72 @@ jobs:
           gh release create "v${VERSION}" \
             --title "Pelagos v${VERSION}" \
             --generate-notes \
-            "${DMG}#pelagos-ui-${VERSION}-aarch64.dmg"
+            "${DMG}"
+
+  update-tap:
+    name: Update Homebrew tap cask
+    needs: [release]
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Extract version from tag
+        id: version
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+
+      - name: Fetch release asset sha256
+        id: sha
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          URL="https://github.com/pelagos-containers/pelagos-ui/releases/download/v${VERSION}/Pelagos_${VERSION}_aarch64.dmg"
+          SHA=$(curl -fsSL "$URL" | sha256sum | awk '{print $1}')
+          echo "sha=${SHA}" >> "$GITHUB_OUTPUT"
+
+      - name: Render updated cask
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          SHA="${{ steps.sha.outputs.sha }}"
+          cat > pelagos-ui.rb << CASK_EOF
+          cask "pelagos-ui" do
+            version "${VERSION}"
+            sha256 "${SHA}"
+
+            url "https://github.com/pelagos-containers/pelagos-ui/releases/download/v#{version}/Pelagos_#{version}_aarch64.dmg"
+            name "Pelagos"
+            desc "Desktop GUI for the pelagos container runtime"
+            homepage "https://github.com/pelagos-containers/pelagos-ui"
+
+            depends_on formula: "pelagos-containers/tap/pelagos-mac"
+
+            app "Pelagos.app"
+
+            # Ad-hoc signed only — remove Gatekeeper quarantine after install.
+            # TODO: remove postflight once Developer ID signing + notarization is in place (epic #225).
+            postflight do
+              system_command "/usr/bin/xattr",
+                args: ["-dr", "com.apple.quarantine", "#{appdir}/Pelagos.app"]
+            end
+
+            uninstall quit: "io.pelagos.ui"
+
+            zap trash: [
+              "~/Library/Logs/io.pelagos.ui",
+              "~/Library/WebKit/io.pelagos.ui",
+              "~/Library/Application Support/io.pelagos.ui",
+            ]
+          end
+          CASK_EOF
+
+      - name: Push updated cask to homebrew-tap
+        env:
+          GH_TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }}
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          CASK_SHA=$(gh api repos/pelagos-containers/homebrew-tap/contents/Casks/pelagos-ui.rb \
+            --jq '.sha')
+          gh api --method PUT \
+            "repos/pelagos-containers/homebrew-tap/contents/Casks/pelagos-ui.rb" \
+            --field message="chore: update pelagos-ui cask to v${VERSION}" \
+            --field content="$(base64 -w0 pelagos-ui.rb)" \
+            --field sha="${CASK_SHA}"

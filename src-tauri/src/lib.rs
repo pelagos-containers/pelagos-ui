@@ -173,6 +173,12 @@ fn make_backend() -> Arc<dyn backend::RuntimeBackend> {
 
 #[cfg(target_os = "macos")]
 fn make_backend() -> Arc<dyn backend::RuntimeBackend> {
+    if find_pelagos_bin().is_none() {
+        log::warn!(
+            "pelagos binary not found — install pelagos-mac first: \
+             brew install pelagos-containers/tap/pelagos-mac"
+        );
+    }
     Arc::new(backend::vsock::VsockBackend::with_default_path())
 }
 
