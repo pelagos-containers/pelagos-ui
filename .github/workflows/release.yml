@@ -124,13 +124,6 @@ jobs:
 
             app "Pelagos.app"
 
-            # Ad-hoc signed only — remove Gatekeeper quarantine after install.
-            # TODO: remove postflight once Developer ID signing + notarization is in place (epic #225).
-            postflight do
-              system_command "/usr/bin/xattr",
-                args: ["-dr", "com.apple.quarantine", "#{appdir}/Pelagos.app"]
-            end
-
             uninstall quit: "io.pelagos.ui"
 
             zap trash: [
