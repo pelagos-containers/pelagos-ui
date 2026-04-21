@@ -49,7 +49,7 @@
     });
 
     try {
-      const code = await pullImage(pullRef.trim());
+      const code = await pullImage(pullRef.trim().toLowerCase());
       if (code !== 0) {
         pullError = `pull exited with code ${code}`;
       } else {
