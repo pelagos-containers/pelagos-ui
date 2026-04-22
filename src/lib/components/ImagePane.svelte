@@ -158,7 +158,7 @@
     disabled={busy}
     on:keydown={(e) => {
       if (e.key !== 'Enter') return;
-      const target = showNewEntry ? query.trim() : (matchedImages[0]?.reference ?? null);
+      const target = showNewEntry ? query.trim().toLowerCase() : (matchedImages[0]?.reference ?? null);
       if (target) select(target);
     }}
   />
@@ -174,7 +174,7 @@
 
   <!-- new / unmatched entry -->
   {#if showNewEntry}
-    {@const newRef = query.trim()}
+    {@const newRef = query.trim().toLowerCase()}
     <div
       class="image-row new-entry"
       class:selected={selectedRef === newRef}

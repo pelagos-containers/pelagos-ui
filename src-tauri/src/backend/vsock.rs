@@ -145,6 +145,9 @@ impl RuntimeBackend for VsockBackend {
             json: true,
         };
         let stdout = self.roundtrip(&cmd).await?;
+        if stdout.trim().is_empty() {
+            return Err(BackendError::Other("VM not ready".into()));
+        }
         Ok(serde_json::from_str(&stdout)?)
     }
 
@@ -250,6 +253,9 @@ impl RuntimeBackend for VsockBackend {
         let stdout = self
             .roundtrip(&GuestCommand::ImageLs { json: true })
             .await?;
+        if stdout.trim().is_empty() {
+            return Err(BackendError::Other("VM not ready".into()));
+        }
         Ok(serde_json::from_str(&stdout)?)
     }
 
