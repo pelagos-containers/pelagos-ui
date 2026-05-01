@@ -3,10 +3,14 @@
   import { containers, loading, error, startPolling } from '$lib/stores/containers';
   import ContainerRow from '$lib/components/ContainerRow.svelte';
   import ImagePane from '$lib/components/ImagePane.svelte';
+  import LogsPanel from '$lib/components/LogsPanel.svelte';
   import { stopContainer, removeContainer } from '$lib/ipc';
   import type { ContainerInfo } from '$lib/ipc';
 
   let stopPolling: () => void;
+
+  // Logs panel state
+  let logsContainer: ContainerInfo | null = null;
 
   // Filter + sort state
   let runningOnly = true;
@@ -37,6 +41,10 @@
     } catch (e) {
       error.set(String(e));
     }
+  }
+
+  function handleLogs(name: string) {
+    logsContainer = $containers.find(c => c.name === name) ?? null;
   }
 
   function setSort(col: SortCol) {
@@ -168,6 +176,7 @@
                 on:stop={e => handleStop(e.detail)}
                 on:remove={e => handleRemove(e.detail)}
                 on:toggle={e => toggleSelected(e.detail)}
+                on:logs={e => handleLogs(e.detail)}
               />
             {/each}
           </tbody>
@@ -185,6 +194,18 @@
       </div>
       <ImagePane />
     </div>
+
+    <!-- logs pane: shown when a container is selected for logs -->
+    {#if logsContainer}
+      <div class="pane-divider"></div>
+      <div class="pane logs-pane">
+        <LogsPanel
+          containerName={logsContainer.name}
+          isRunning={logsContainer.status === 'running'}
+          on:close={() => { logsContainer = null; }}
+        />
+      </div>
+    {/if}
 
   </div>
 </div>
@@ -289,6 +310,11 @@
   .image-pane {
     flex: 1 1 0;
     min-height: 180px;
+  }
+  .logs-pane {
+    flex: 0 0 260px;
+    min-height: 120px;
+    overflow: hidden;
   }
   .pane-header {
     display: flex;

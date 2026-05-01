@@ -202,6 +202,49 @@ impl RuntimeBackend for ProcessBackend {
         }
         Ok(())
     }
+
+    async fn stream_logs(
+        &self,
+        name: &str,
+        follow: bool,
+        tx: UnboundedSender<String>,
+    ) -> Result<(), BackendError> {
+        let bin = self.bin.as_ref().ok_or(BackendError::BinaryNotFound)?;
+        let mut cmd = Command::new(bin);
+        cmd.arg("logs");
+        if follow {
+            cmd.arg("--follow");
+        }
+        cmd.arg(name);
+        cmd.stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped());
+
+        let mut child = cmd.spawn().map_err(BackendError::Io)?;
+        let stdout = child.stdout.take().unwrap();
+        let stderr = child.stderr.take().unwrap();
+
+        let tx2 = tx.clone();
+        let h1 = tokio::spawn(async move {
+            let mut lines = BufReader::new(stdout).lines();
+            while let Ok(Some(line)) = lines.next_line().await {
+                if tx.send(line).is_err() {
+                    break;
+                }
+            }
+        });
+        let h2 = tokio::spawn(async move {
+            let mut lines = BufReader::new(stderr).lines();
+            while let Ok(Some(line)) = lines.next_line().await {
+                if tx2.send(line).is_err() {
+                    break;
+                }
+            }
+        });
+
+        let _ = tokio::join!(h1, h2);
+        child.wait().await.map_err(BackendError::Io)?;
+        Ok(())
+    }
 }
 
 #[cfg(test)]

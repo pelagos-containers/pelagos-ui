@@ -91,4 +91,15 @@ pub trait RuntimeBackend: Send + Sync + 'static {
 
     /// Remove a locally cached OCI image.
     async fn remove_image(&self, reference: &str) -> Result<(), BackendError>;
+
+    /// Stream log output for a container.  Each line is sent to `tx`.
+    /// When `follow` is true the stream continues until the task is aborted
+    /// or the container exits.  When `follow` is false it returns after all
+    /// existing log output has been sent.
+    async fn stream_logs(
+        &self,
+        name: &str,
+        follow: bool,
+        tx: UnboundedSender<String>,
+    ) -> Result<(), BackendError>;
 }

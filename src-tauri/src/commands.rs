@@ -3,11 +3,15 @@
 //! Each command is a thin async wrapper over RuntimeBackend.
 //! Errors serialise as strings (BackendError implements Serialize).
 
-use std::sync::Arc;
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
 use tauri::{Emitter, State};
 
 use crate::backend::{BackendError, RuntimeBackend};
 use pelagos_protocol::{ContainerInfo, GuestMount, ImageInfo, VmStatus};
+
+/// Managed state tracking active log-streaming tasks, keyed by container name.
+pub struct LogState(pub Mutex<HashMap<String, tauri::async_runtime::JoinHandle<()>>>);
 
 /// Return all containers (running + exited).
 ///
@@ -215,4 +219,54 @@ pub async fn remove_image(
     backend: State<'_, Arc<dyn RuntimeBackend>>,
 ) -> Result<(), BackendError> {
     backend.remove_image(&reference).await
+}
+
+/// Start streaming logs for a container.  Returns immediately; log lines
+/// arrive as `log-line` events: `{ name: string, line: string }`.
+/// Calling again for the same container cancels the previous stream.
+///
+/// Frontend: subscribe to `log-line`, then `await invoke('stream_logs', { name, follow })`
+#[tauri::command]
+pub async fn stream_logs(
+    app: tauri::AppHandle,
+    backend: State<'_, Arc<dyn RuntimeBackend>>,
+    log_state: State<'_, LogState>,
+    name: String,
+    follow: bool,
+) -> Result<(), BackendError> {
+    if let Some(h) = log_state.0.lock().unwrap().remove(&name) {
+        h.abort();
+    }
+
+    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<String>();
+    let backend_arc = backend.inner().clone();
+    let name_stream = name.clone();
+    let name_emit = name.clone();
+    let app2 = app.clone();
+
+    let handle = tauri::async_runtime::spawn(async move {
+        let emitter = tauri::async_runtime::spawn(async move {
+            while let Some(line) = rx.recv().await {
+                let _ = app2.emit(
+                    "log-line",
+                    serde_json::json!({ "name": name_emit, "line": line }),
+                );
+            }
+        });
+        let _ = backend_arc.stream_logs(&name_stream, follow, tx).await;
+        emitter.abort();
+    });
+
+    log_state.0.lock().unwrap().insert(name, handle);
+    Ok(())
+}
+
+/// Stop an active log stream for a container.
+///
+/// Frontend: `await invoke('stop_logs', { name })`
+#[tauri::command]
+pub fn stop_logs(log_state: State<'_, LogState>, name: String) {
+    if let Some(h) = log_state.0.lock().unwrap().remove(&name) {
+        h.abort();
+    }
 }
