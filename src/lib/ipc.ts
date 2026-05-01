@@ -39,3 +39,8 @@ export interface ImageInfo {
 export const listImages   = ()                    => invoke<ImageInfo[]>('list_images');
 export const pullImage    = (reference: string)   => invoke<number>('pull_image', { reference });
 export const removeImage  = (reference: string)   => invoke<void>('remove_image', { reference });
+
+export const streamLogs = (name: string, follow: boolean) =>
+  invoke<void>('stream_logs', { name, follow });
+export const stopLogs = (name: string) =>
+  invoke<void>('stop_logs', { name });

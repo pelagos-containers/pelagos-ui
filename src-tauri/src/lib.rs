@@ -21,6 +21,9 @@ pub fn run() {
     tauri::Builder::default()
         .manage(backend)
         .manage(pty::PtyState::new())
+        .manage(commands::LogState(std::sync::Mutex::new(
+            std::collections::HashMap::new(),
+        )))
         .invoke_handler(tauri::generate_handler![
             commands::list_containers,
             commands::stop_container,
@@ -31,6 +34,8 @@ pub fn run() {
             commands::list_images,
             commands::pull_image,
             commands::remove_image,
+            commands::stream_logs,
+            commands::stop_logs,
             pty::launch_terminal_window,
             pty::pty_start,
             pty::pty_input,

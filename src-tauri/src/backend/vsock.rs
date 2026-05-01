@@ -312,8 +312,55 @@ impl RuntimeBackend for VsockBackend {
             reference: reference.to_string(),
         };
         let stdout = self.roundtrip(&cmd).await?;
-        // roundtrip returns accumulated stdout; for rm we only care about exit/error
         let _ = stdout;
+        Ok(())
+    }
+
+    async fn stream_logs(
+        &self,
+        name: &str,
+        follow: bool,
+        tx: UnboundedSender<String>,
+    ) -> Result<(), BackendError> {
+        let cmd = GuestCommand::Logs {
+            name: name.to_string(),
+            follow,
+        };
+
+        let stream = self.connect().await?;
+        let (reader, mut writer) = stream.into_split();
+        let mut reader = BufReader::new(reader);
+
+        let mut line = serde_json::to_string(&cmd).map_err(BackendError::ParseError)?;
+        line.push('\n');
+        writer
+            .write_all(line.as_bytes())
+            .await
+            .map_err(BackendError::Io)?;
+
+        let mut buf = String::new();
+        loop {
+            buf.clear();
+            let n = reader.read_line(&mut buf).await.map_err(BackendError::Io)?;
+            if n == 0 {
+                break;
+            }
+            match serde_json::from_str::<GuestResponse>(buf.trim()) {
+                Ok(GuestResponse::Stream { data, .. }) => {
+                    for l in data.lines() {
+                        if tx.send(l.to_string()).is_err() {
+                            return Ok(());
+                        }
+                    }
+                }
+                Ok(GuestResponse::Exit { .. }) => break,
+                Ok(GuestResponse::Error { error }) => {
+                    return Err(BackendError::Other(error));
+                }
+                Ok(_) => {}
+                Err(e) => log::warn!("unparseable guest response: {e}: {}", buf.trim()),
+            }
+        }
         Ok(())
     }
 }

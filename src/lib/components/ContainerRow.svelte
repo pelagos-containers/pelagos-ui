@@ -7,7 +7,7 @@
   export let editMode = false;
   export let checked = false;
 
-  const dispatch = createEventDispatcher<{ stop: string; remove: string; toggle: string }>();
+  const dispatch = createEventDispatcher<{ stop: string; remove: string; toggle: string; logs: string }>();
 
   function age(iso: string): string {
     const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
@@ -45,6 +45,7 @@
   <td class="pid dim">{container.pid > 0 ? container.pid : '—'}</td>
   <td class="actions">
     {#if !editMode}
+      <button class="logs-btn" on:click={() => dispatch('logs', container.name)}>Logs</button>
       {#if container.status === 'running'}
         <button on:click={() => dispatch('stop', container.name)}>Stop</button>
       {/if}
@@ -88,5 +89,7 @@
     font-size: 0.75rem;
   }
   button:hover        { background: #2d3748; }
-  button.danger:hover { background: #7f1d1d; border-color: #991b1b; color: #fca5a5; }
+  button.danger:hover  { background: #7f1d1d; border-color: #991b1b; color: #fca5a5; }
+  button.logs-btn      { color: #93c5fd; border-color: #1d3a5c; }
+  button.logs-btn:hover { background: #1d3a5c; border-color: #3b82f6; }
 </style>
