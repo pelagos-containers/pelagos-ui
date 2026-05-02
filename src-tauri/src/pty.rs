@@ -15,13 +15,26 @@ use tauri::{Emitter, WebviewUrl, WebviewWindowBuilder};
 
 // ── State ─────────────────────────────────────────────────────────────────────
 
-/// Pending run params, held between `launch_terminal_window` and `pty_start`.
+/// What kind of pelagos session to spawn in a terminal window.
+pub enum PtyMode {
+    /// `pelagos run --tty --interactive [opts] <image> [args]`
+    Run {
+        image: String,
+        name: Option<String>,
+        args: Vec<String>,
+        ports: Vec<String>,
+        volumes: Vec<String>,
+    },
+    /// `pelagos exec -i <container> [cmd]`
+    Exec {
+        container: String,
+        cmd: Vec<String>,
+    },
+}
+
+/// Pending session params, held between `launch_*_window` and `pty_start`.
 pub struct PtyParams {
-    pub image: String,
-    pub name: Option<String>,
-    pub args: Vec<String>,
-    pub ports: Vec<String>,
-    pub volumes: Vec<String>,
+    pub mode: PtyMode,
 }
 
 /// Live PTY session — kept alive for resize and input.
@@ -53,10 +66,6 @@ impl PtyState {
 
 /// Open a new terminal window for `pelagos run --tty --interactive image [args]`.
 ///
-/// Stores the run params in [`PtyState`] under a fresh UUID label, then opens a
-/// Tauri [`WebviewWindow`] at `/terminal?label=<uuid>`.  The window's Svelte page
-/// calls [`pty_start`] once xterm.js is mounted.
-///
 /// Frontend: `await invoke('launch_terminal_window', { image, name, args, ports, volumes })`
 #[tauri::command]
 pub fn launch_terminal_window(
@@ -68,29 +77,43 @@ pub fn launch_terminal_window(
     ports: Vec<String>,
     volumes: Vec<String>,
 ) -> Result<String, String> {
+    let title = format!("pelagos — {image}");
+    open_terminal_window(&app, &state, title, PtyMode::Run { image, name, args, ports, volumes })
+}
+
+/// Open a new terminal window for `pelagos exec -i <container> [cmd]`.
+///
+/// `cmd` defaults to `["sh"]` when empty.
+///
+/// Frontend: `await invoke('launch_exec_window', { container, cmd })`
+#[tauri::command]
+pub fn launch_exec_window(
+    app: tauri::AppHandle,
+    state: tauri::State<PtyState>,
+    container: String,
+    cmd: Vec<String>,
+) -> Result<String, String> {
+    let title = format!("pelagos — exec {container}");
+    open_terminal_window(&app, &state, title, PtyMode::Exec { container, cmd })
+}
+
+/// Shared implementation: park params and open a terminal WebviewWindow.
+fn open_terminal_window(
+    app: &tauri::AppHandle,
+    state: &tauri::State<PtyState>,
+    title: String,
+    mode: PtyMode,
+) -> Result<String, String> {
     let label = format!("terminal-{}", uuid::Uuid::new_v4().simple());
-
-    // Park the params until the window calls pty_start.
-    state.0.lock().unwrap().pending.insert(
-        label.clone(),
-        PtyParams {
-            image: image.clone(),
-            name,
-            args,
-            ports,
-            volumes,
-        },
-    );
-
+    state.0.lock().unwrap().pending.insert(label.clone(), PtyParams { mode });
     let url = WebviewUrl::App(format!("/terminal?label={}", label).into());
-    WebviewWindowBuilder::new(&app, &label, url)
-        .title(format!("pelagos — {image}"))
+    WebviewWindowBuilder::new(app, &label, url)
+        .title(title)
         .inner_size(900.0, 600.0)
         .min_inner_size(400.0, 300.0)
         .resizable(true)
         .build()
         .map_err(|e| e.to_string())?;
-
     Ok(label)
 }
 
@@ -124,28 +147,44 @@ pub async fn pty_start(
     // Build the command args before entering spawn_blocking.
     let pelagos = find_pelagos_bin();
     let mut cmd = CommandBuilder::new(&pelagos);
-    cmd.arg("run");
-    cmd.arg("--tty");
-    cmd.arg("--interactive");
-    if let Some(n) = &params.name {
-        cmd.arg("--name");
-        cmd.arg(n);
-    }
-    if !params.ports.is_empty() {
-        for p in &params.ports {
-            cmd.arg("-p");
-            cmd.arg(p);
+    match &params.mode {
+        PtyMode::Run { image, name, args, ports, volumes } => {
+            cmd.arg("run");
+            cmd.arg("--tty");
+            cmd.arg("--interactive");
+            if let Some(n) = name {
+                cmd.arg("--name");
+                cmd.arg(n);
+            }
+            if !ports.is_empty() {
+                for p in ports {
+                    cmd.arg("-p");
+                    cmd.arg(p);
+                }
+                cmd.arg("-n");
+                cmd.arg("pasta");
+            }
+            for v in volumes {
+                cmd.arg("-v");
+                cmd.arg(v);
+            }
+            cmd.arg(image);
+            for a in args {
+                cmd.arg(a);
+            }
         }
-        cmd.arg("-n");
-        cmd.arg("pasta");
-    }
-    for v in &params.volumes {
-        cmd.arg("-v");
-        cmd.arg(v);
-    }
-    cmd.arg(&params.image);
-    for a in &params.args {
-        cmd.arg(a);
+        PtyMode::Exec { container, cmd: exec_cmd } => {
+            cmd.arg("exec");
+            cmd.arg("-i");
+            cmd.arg(container);
+            if exec_cmd.is_empty() {
+                cmd.arg("sh");
+            } else {
+                for a in exec_cmd {
+                    cmd.arg(a);
+                }
+            }
+        }
     }
 
     // PTY allocation and process spawn are blocking syscalls (openpty, fork,
@@ -322,11 +361,13 @@ mod tests {
             map.pending.insert(
                 label.clone(),
                 PtyParams {
-                    image: "alpine:latest".into(),
-                    name: Some("my-container".into()),
-                    args: vec!["/bin/sh".into()],
-                    ports: vec!["8080:80".into()],
-                    volumes: vec![],
+                    mode: PtyMode::Run {
+                        image: "alpine:latest".into(),
+                        name: Some("my-container".into()),
+                        args: vec!["/bin/sh".into()],
+                        ports: vec!["8080:80".into()],
+                        volumes: vec![],
+                    },
                 },
             );
             assert!(map.pending.contains_key(&label));
@@ -335,16 +376,52 @@ mod tests {
         {
             let mut map = state.0.lock().unwrap();
             let params = map.pending.remove(&label).expect("params should exist");
-            assert_eq!(params.image, "alpine:latest");
-            assert_eq!(params.name.as_deref(), Some("my-container"));
-            assert_eq!(params.args, vec!["/bin/sh"]);
-            assert_eq!(params.ports, vec!["8080:80"]);
-            assert!(params.volumes.is_empty());
+            match params.mode {
+                PtyMode::Run { image, name, args, ports, volumes } => {
+                    assert_eq!(image, "alpine:latest");
+                    assert_eq!(name.as_deref(), Some("my-container"));
+                    assert_eq!(args, vec!["/bin/sh"]);
+                    assert_eq!(ports, vec!["8080:80"]);
+                    assert!(volumes.is_empty());
+                }
+                _ => panic!("expected Run mode"),
+            }
         }
 
         {
             let map = state.0.lock().unwrap();
             assert!(map.pending.is_empty());
+        }
+    }
+
+    #[test]
+    fn pending_params_exec_mode() {
+        let state = PtyState::new();
+        let label = "terminal-exec-test".to_string();
+
+        {
+            let mut map = state.0.lock().unwrap();
+            map.pending.insert(
+                label.clone(),
+                PtyParams {
+                    mode: PtyMode::Exec {
+                        container: "my-container".into(),
+                        cmd: vec!["bash".into()],
+                    },
+                },
+            );
+        }
+
+        {
+            let mut map = state.0.lock().unwrap();
+            let params = map.pending.remove(&label).expect("params should exist");
+            match params.mode {
+                PtyMode::Exec { container, cmd } => {
+                    assert_eq!(container, "my-container");
+                    assert_eq!(cmd, vec!["bash"]);
+                }
+                _ => panic!("expected Exec mode"),
+            }
         }
     }
 

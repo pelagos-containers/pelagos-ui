@@ -4,7 +4,7 @@
   import ContainerRow from '$lib/components/ContainerRow.svelte';
   import ImagePane from '$lib/components/ImagePane.svelte';
   import LogsPanel from '$lib/components/LogsPanel.svelte';
-  import { stopContainer, removeContainer } from '$lib/ipc';
+  import { stopContainer, removeContainer, launchExecWindow } from '$lib/ipc';
   import type { ContainerInfo } from '$lib/ipc';
 
   let stopPolling: () => void;
@@ -45,6 +45,14 @@
 
   function handleLogs(name: string) {
     logsContainer = $containers.find(c => c.name === name) ?? null;
+  }
+
+  async function handleExec(name: string) {
+    try {
+      await launchExecWindow(name, []);
+    } catch (e) {
+      error.set(String(e));
+    }
   }
 
   function setSort(col: SortCol) {
@@ -177,6 +185,7 @@
                 on:remove={e => handleRemove(e.detail)}
                 on:toggle={e => toggleSelected(e.detail)}
                 on:logs={e => handleLogs(e.detail)}
+              on:exec={e => handleExec(e.detail)}
               />
             {/each}
           </tbody>

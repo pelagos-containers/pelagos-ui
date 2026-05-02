@@ -37,6 +37,7 @@ pub fn run() {
             commands::stream_logs,
             commands::stop_logs,
             pty::launch_terminal_window,
+            pty::launch_exec_window,
             pty::pty_start,
             pty::pty_input,
             pty::pty_resize,

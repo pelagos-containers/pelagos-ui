@@ -30,6 +30,11 @@ export const runContainer      = (image: string, name: string | null, args: stri
 export const launchTerminalWindow = (image: string, name: string | null, args: string[], ports: string[], volumes: string[]) =>
   invoke<string>('launch_terminal_window', { image, name, args, ports, volumes });
 
+/// Open an embedded terminal window for `pelagos exec -i <container> [cmd]`.
+/// Returns the window label.
+export const launchExecWindow = (container: string, cmd: string[]) =>
+  invoke<string>('launch_exec_window', { container, cmd });
+
 export interface ImageInfo {
   reference: string;
   digest:    string;
