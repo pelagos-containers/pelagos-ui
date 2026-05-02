@@ -316,6 +316,62 @@ impl RuntimeBackend for VsockBackend {
         Ok(())
     }
 
+    async fn kubernetes_status(&self) -> Result<bool, BackendError> {
+        let stream = self.connect().await?;
+        let (reader, mut writer) = stream.into_split();
+        let mut reader = BufReader::new(reader);
+
+        let mut line = serde_json::to_string(&GuestCommand::KubernetesStatus).map_err(BackendError::ParseError)?;
+        line.push('\n');
+        writer.write_all(line.as_bytes()).await.map_err(BackendError::Io)?;
+
+        let mut buf = String::new();
+        loop {
+            buf.clear();
+            if reader.read_line(&mut buf).await.map_err(BackendError::Io)? == 0 { break; }
+            match serde_json::from_str::<GuestResponse>(buf.trim()) {
+                Ok(GuestResponse::KubernetesStatus { running }) => return Ok(running),
+                Ok(GuestResponse::Error { error }) => return Err(BackendError::Other(error)),
+                Ok(GuestResponse::Exit { .. }) => break,
+                Ok(_) => {}
+                Err(e) => log::warn!("unparseable guest response: {e}: {}", buf.trim()),
+            }
+        }
+        Ok(false)
+    }
+
+    async fn start_kubernetes(&self, tx: UnboundedSender<String>) -> Result<(), BackendError> {
+        let cmd = GuestCommand::KubernetesStart;
+        let stream = self.connect().await?;
+        let (reader, mut writer) = stream.into_split();
+        let mut reader = BufReader::new(reader);
+
+        let mut line = serde_json::to_string(&cmd).map_err(BackendError::ParseError)?;
+        line.push('\n');
+        writer.write_all(line.as_bytes()).await.map_err(BackendError::Io)?;
+
+        let mut buf = String::new();
+        loop {
+            buf.clear();
+            if reader.read_line(&mut buf).await.map_err(BackendError::Io)? == 0 { break; }
+            match serde_json::from_str::<GuestResponse>(buf.trim()) {
+                Ok(GuestResponse::Stream { data, .. }) => {
+                    for l in data.lines() { let _ = tx.send(l.to_string()); }
+                }
+                Ok(GuestResponse::Exit { .. }) => break,
+                Ok(GuestResponse::Error { error }) => return Err(BackendError::Other(error)),
+                Ok(_) => {}
+                Err(e) => log::warn!("unparseable guest response: {e}: {}", buf.trim()),
+            }
+        }
+        Ok(())
+    }
+
+    async fn stop_kubernetes(&self) -> Result<(), BackendError> {
+        self.roundtrip(&GuestCommand::KubernetesStop).await?;
+        Ok(())
+    }
+
     async fn stream_logs(
         &self,
         name: &str,

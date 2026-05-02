@@ -4,10 +4,15 @@
   import ContainerRow from '$lib/components/ContainerRow.svelte';
   import ImagePane from '$lib/components/ImagePane.svelte';
   import LogsPanel from '$lib/components/LogsPanel.svelte';
+  import KubernetesPane from '$lib/components/KubernetesPane.svelte';
   import { stopContainer, removeContainer, launchExecWindow } from '$lib/ipc';
   import type { ContainerInfo } from '$lib/ipc';
 
   let stopPolling: () => void;
+
+  // Tab state
+  type Tab = 'containers' | 'kubernetes';
+  let activeTab: Tab = 'containers';
 
   // Logs panel state
   let logsContainer: ContainerInfo | null = null;
@@ -148,25 +153,36 @@
   <!-- ── header ──────────────────────────────────────────────────────────── -->
   <header>
     <h1>Pelagos</h1>
+    <nav class="tab-bar">
+      <button class="tab-btn" class:active={activeTab === 'containers'} on:click={() => activeTab = 'containers'}>Containers</button>
+      <button class="tab-btn" class:active={activeTab === 'kubernetes'} on:click={() => activeTab = 'kubernetes'}>Kubernetes</button>
+    </nav>
     {#if $loading}<span class="hint">loading…</span>{/if}
     {#if $error}<span class={$error === 'VM stopped' ? 'hint' : 'err'}>{$error}</span>{/if}
-    {#if !editMode}
-      <button
-        class="filter-btn"
-        class:active={runningOnly}
-        on:click={() => (runningOnly = !runningOnly)}
-        title={runningOnly ? 'Showing running only — click to show all' : 'Showing all — click to show running only'}
-      >{runningOnly ? 'Running' : 'All'}</button>
-      {#if exitedCount > 0}
-        <button class="edit-btn" on:click={enterEditMode}>Edit</button>
+    {#if activeTab === 'containers'}
+      {#if !editMode}
+        <button
+          class="filter-btn"
+          class:active={runningOnly}
+          on:click={() => (runningOnly = !runningOnly)}
+          title={runningOnly ? 'Showing running only — click to show all' : 'Showing all — click to show running only'}
+        >{runningOnly ? 'Running' : 'All'}</button>
+        {#if exitedCount > 0}
+          <button class="edit-btn" on:click={enterEditMode}>Edit</button>
+        {/if}
+      {:else}
+        <button class="remove-btn" on:click={removeSelected} disabled={removing || selected.size === 0}>
+          {removing ? 'Removing…' : `Remove selected (${selected.size})`}
+        </button>
+        <button class="cancel-btn" on:click={cancelEdit} disabled={removing}>Cancel</button>
       {/if}
-    {:else}
-      <button class="remove-btn" on:click={removeSelected} disabled={removing || selected.size === 0}>
-        {removing ? 'Removing…' : `Remove selected (${selected.size})`}
-      </button>
-      <button class="cancel-btn" on:click={cancelEdit} disabled={removing}>Cancel</button>
     {/if}
   </header>
+
+  <!-- ── kubernetes tab ─────────────────────────────────────────────────── -->
+  {#if activeTab === 'kubernetes'}
+    <KubernetesPane />
+  {:else}
 
   <!-- ── two-pane layout ─────────────────────────────────────────────────── -->
   <div class="layout">
@@ -237,6 +253,7 @@
     {/if}
 
   </div>
+  {/if}
 </div>
 
 <!-- exec command modal -->
@@ -289,6 +306,20 @@
   h1      { margin: 0; font-size: 1.1rem; font-weight: 700; letter-spacing: -0.01em; }
   .hint   { color: #6b7280; font-size: 0.8rem; }
   .err    { color: #f87171; font-size: 0.8rem; }
+
+  .tab-bar { display: flex; gap: 4px; }
+  .tab-btn {
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    color: #6b7280;
+    cursor: pointer;
+    font-size: 0.78rem;
+    font-weight: 600;
+    padding: 3px 12px;
+  }
+  .tab-btn:hover { color: #d1d5db; }
+  .tab-btn.active { border-color: #374151; color: #f0f0f0; background: #1a1f2e; }
 
   .filter-btn {
     margin-left: auto;
