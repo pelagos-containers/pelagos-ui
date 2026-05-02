@@ -4,13 +4,18 @@
   import ContainerRow from '$lib/components/ContainerRow.svelte';
   import ImagePane from '$lib/components/ImagePane.svelte';
   import LogsPanel from '$lib/components/LogsPanel.svelte';
-  import { stopContainer, removeContainer } from '$lib/ipc';
+  import { stopContainer, removeContainer, launchExecWindow } from '$lib/ipc';
   import type { ContainerInfo } from '$lib/ipc';
 
   let stopPolling: () => void;
 
   // Logs panel state
   let logsContainer: ContainerInfo | null = null;
+
+  // Exec modal state
+  let execContainer: string | null = null;
+  let execCmd = 'sh';
+  let execInput: HTMLInputElement;
 
   // Filter + sort state
   let runningOnly = true;
@@ -45,6 +50,29 @@
 
   function handleLogs(name: string) {
     logsContainer = $containers.find(c => c.name === name) ?? null;
+  }
+
+  function handleExec(name: string) {
+    execContainer = name;
+    execCmd = 'sh';
+    // Focus the input after the modal renders.
+    setTimeout(() => execInput?.focus(), 0);
+  }
+
+  async function submitExec() {
+    if (!execContainer) return;
+    const name = execContainer;
+    const cmd = execCmd.trim().split(/\s+/).filter(Boolean);
+    execContainer = null;
+    try {
+      await launchExecWindow(name, cmd.length ? cmd : ['sh']);
+    } catch (e) {
+      error.set(String(e));
+    }
+  }
+
+  function cancelExec() {
+    execContainer = null;
   }
 
   function setSort(col: SortCol) {
@@ -177,6 +205,7 @@
                 on:remove={e => handleRemove(e.detail)}
                 on:toggle={e => toggleSelected(e.detail)}
                 on:logs={e => handleLogs(e.detail)}
+              on:exec={e => handleExec(e.detail)}
               />
             {/each}
           </tbody>
@@ -209,6 +238,28 @@
 
   </div>
 </div>
+
+<!-- exec command modal -->
+{#if execContainer}
+  <!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->
+  <div class="modal-backdrop" on:click={cancelExec}>
+    <div class="modal" on:click|stopPropagation>
+      <p class="modal-title">Exec into <strong>{execContainer}</strong></p>
+      <input
+        bind:this={execInput}
+        bind:value={execCmd}
+        class="modal-input"
+        type="text"
+        placeholder="sh"
+        on:keydown={e => { if (e.key === 'Enter') submitExec(); else if (e.key === 'Escape') cancelExec(); }}
+      />
+      <div class="modal-actions">
+        <button class="modal-cancel" on:click={cancelExec}>Cancel</button>
+        <button class="modal-submit" on:click={submitExec}>Open Terminal</button>
+      </div>
+    </div>
+  </div>
+{/if}
 
 <p class="attribution">Photo: Jeri Leandera (CC BY-SA)</p>
 <p class="attribution attribution-left">Icon: hibernut / Noun Project (CC BY)</p>
@@ -378,4 +429,66 @@
     right: unset;
     left: 12px;
   }
+
+  .modal-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+  }
+  .modal {
+    background: #1a1f2e;
+    border: 1px solid #374151;
+    border-radius: 8px;
+    padding: 20px 24px;
+    width: 360px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .modal-title {
+    margin: 0;
+    font-size: 0.85rem;
+    color: #d1d5db;
+  }
+  .modal-title strong { color: #f0f0f0; }
+  .modal-input {
+    background: #0d1117;
+    border: 1px solid #374151;
+    border-radius: 4px;
+    color: #f0f0f0;
+    font-family: ui-monospace, monospace;
+    font-size: 0.85rem;
+    padding: 6px 10px;
+    width: 100%;
+  }
+  .modal-input:focus { outline: none; border-color: #3b82f6; }
+  .modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+  }
+  .modal-cancel {
+    background: transparent;
+    border: 1px solid #374151;
+    border-radius: 4px;
+    color: #9ca3af;
+    cursor: pointer;
+    font-size: 0.75rem;
+    padding: 4px 12px;
+  }
+  .modal-cancel:hover { border-color: #6b7280; color: #f0f0f0; }
+  .modal-submit {
+    background: #14532d;
+    border: 1px solid #22c55e;
+    border-radius: 4px;
+    color: #86efac;
+    cursor: pointer;
+    font-size: 0.75rem;
+    padding: 4px 12px;
+  }
+  .modal-submit:hover { background: #166534; }
 </style>

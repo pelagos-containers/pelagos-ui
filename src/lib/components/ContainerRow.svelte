@@ -7,7 +7,7 @@
   export let editMode = false;
   export let checked = false;
 
-  const dispatch = createEventDispatcher<{ stop: string; remove: string; toggle: string; logs: string }>();
+  const dispatch = createEventDispatcher<{ stop: string; remove: string; toggle: string; logs: string; exec: string }>();
 
   function age(iso: string): string {
     const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
@@ -47,6 +47,7 @@
     {#if !editMode}
       <button class="logs-btn" on:click={() => dispatch('logs', container.name)}>Logs</button>
       {#if container.status === 'running'}
+        <button class="exec-btn" on:click={() => dispatch('exec', container.name)}>Exec</button>
         <button on:click={() => dispatch('stop', container.name)}>Stop</button>
       {/if}
       <button class="danger" on:click={() => dispatch('remove', container.name)}>Remove</button>
@@ -92,4 +93,6 @@
   button.danger:hover  { background: #7f1d1d; border-color: #991b1b; color: #fca5a5; }
   button.logs-btn      { color: #93c5fd; border-color: #1d3a5c; }
   button.logs-btn:hover { background: #1d3a5c; border-color: #3b82f6; }
+  button.exec-btn      { color: #86efac; border-color: #14532d; }
+  button.exec-btn:hover { background: #14532d; border-color: #22c55e; }
 </style>
