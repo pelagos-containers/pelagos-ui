@@ -87,6 +87,13 @@ pub enum GuestResponse {
     /// Emitted by the guest when it is ready to accept the next command on
     /// a multiplexed connection.  Hosts may ignore this.
     Ready { ready: bool },
+
+    // ------------------------------------------------------------------
+    // Kubernetes (rusternetes)
+    // ------------------------------------------------------------------
+    /// Response to [`crate::command::GuestCommand::KubernetesStatus`].
+    /// `running` is `true` when both api-server and kubelet are running.
+    KubernetesStatus { running: bool },
 }
 
 /// Which output stream a [`GuestResponse::Stream`] chunk came from.

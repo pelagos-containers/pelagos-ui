@@ -270,3 +270,42 @@ pub fn stop_logs(log_state: State<'_, LogState>, name: String) {
         h.abort();
     }
 }
+
+/// Return true if rusternetes (api-server + kubelet) is running.
+///
+/// Frontend: `await invoke('kubernetes_status')`
+#[tauri::command]
+pub async fn kubernetes_status(
+    backend: State<'_, Arc<dyn RuntimeBackend>>,
+) -> Result<bool, BackendError> {
+    backend.kubernetes_status().await
+}
+
+/// Start the rusternetes control plane.  Progress lines are emitted as
+/// `kubernetes-start-log` events.
+///
+/// Frontend: `await invoke('start_kubernetes')`
+#[tauri::command]
+pub async fn start_kubernetes(
+    app: tauri::AppHandle,
+    backend: State<'_, Arc<dyn RuntimeBackend>>,
+) -> Result<(), BackendError> {
+    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<String>();
+    let backend_arc = backend.inner().clone();
+    tauri::async_runtime::spawn(async move {
+        while let Some(line) = rx.recv().await {
+            let _ = app.emit("kubernetes-start-log", line);
+        }
+    });
+    backend_arc.start_kubernetes(tx).await
+}
+
+/// Stop the rusternetes control plane.
+///
+/// Frontend: `await invoke('stop_kubernetes')`
+#[tauri::command]
+pub async fn stop_kubernetes(
+    backend: State<'_, Arc<dyn RuntimeBackend>>,
+) -> Result<(), BackendError> {
+    backend.stop_kubernetes().await
+}
