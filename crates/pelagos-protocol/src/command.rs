@@ -177,6 +177,22 @@ pub enum GuestCommand {
     /// Guest replies with `Exit` (exit code 0 = success).
     ImageRm { reference: String },
 
+    // ------------------------------------------------------------------
+    // Kubernetes (rusternetes)
+    // ------------------------------------------------------------------
+    /// Check whether rusternetes (api-server + kubelet) is running.
+    /// Guest replies with [`crate::response::GuestResponse::KubernetesStatus`].
+    KubernetesStatus,
+
+    /// Start the rusternetes control plane (pelagos-dockerd → api-server → kubelet).
+    /// Guest streams startup progress lines and replies with `Exit { exit: 0 }` once
+    /// all components are running, or `Error` if startup fails.
+    KubernetesStart,
+
+    /// Stop rusternetes (kubelet → api-server → pelagos-dockerd).
+    /// Guest replies with `Exit { exit: 0 }`.
+    KubernetesStop,
+
     /// Proxy a `pelagos compose` subcommand to the VM guest.
     ///
     /// The compose file and all relative bind-mount paths must be accessible

@@ -5,6 +5,7 @@
 
 use super::{BackendError, RuntimeBackend};
 use pelagos_protocol::{ContainerInfo, GuestMount, ImageInfo};
+use std::time::Duration;
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::Command;
 use tokio::sync::mpsc::UnboundedSender;
@@ -244,6 +245,112 @@ impl RuntimeBackend for ProcessBackend {
         let _ = tokio::join!(h1, h2);
         child.wait().await.map_err(BackendError::Io)?;
         Ok(())
+    }
+
+    async fn kubernetes_status(&self) -> Result<bool, BackendError> {
+        let api = std::process::Command::new("pgrep")
+            .args(["-x", "api-server"])
+            .status()
+            .map(|s| s.success())
+            .unwrap_or(false);
+        let kubelet = std::process::Command::new("pgrep")
+            .args(["-x", "kubelet"])
+            .status()
+            .map(|s| s.success())
+            .unwrap_or(false);
+        Ok(api && kubelet)
+    }
+
+    async fn start_kubernetes(&self, tx: UnboundedSender<String>) -> Result<(), BackendError> {
+        let dockerd = find_bin("pelagos-dockerd", &["/usr/local/bin", "/mnt/Projects/pelagos/target/debug"]);
+        let api_bin = find_bin("api-server", &["/usr/local/bin", "/mnt/Projects/rusternetes/target/debug"]);
+        let kubelet_bin = find_bin("kubelet", &["/usr/local/bin", "/mnt/Projects/rusternetes/target/debug"]);
+        let data_dir = "/var/lib/rusternetes/cluster.db";
+        std::fs::create_dir_all("/var/lib/rusternetes").map_err(BackendError::Io)?;
+
+        // pelagos-dockerd
+        if !is_running("pelagos-dockerd") {
+            let pelagos = self.bin.as_ref().map(|p| p.as_os_str().to_string_lossy().into_owned()).unwrap_or_else(|| "pelagos".to_string());
+            std::process::Command::new(&dockerd)
+                .arg("--pelagos-bin").arg(&pelagos)
+                .stdin(std::process::Stdio::null())
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null())
+                .spawn()
+                .map_err(BackendError::Io)?;
+            let _ = tx.send("started pelagos-dockerd".into());
+            tokio::time::sleep(Duration::from_millis(500)).await;
+        }
+
+        // api-server
+        if !is_running("api-server") {
+            std::process::Command::new(&api_bin)
+                .args(["--storage-backend", "sqlite", "--data-dir", data_dir,
+                       "--skip-auth", "--tls", "--tls-self-signed",
+                       "--tls-san", "localhost,127.0.0.1"])
+                .stdin(std::process::Stdio::null())
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null())
+                .spawn()
+                .map_err(BackendError::Io)?;
+            let _ = tx.send("started api-server, waiting for ready...".into());
+            wait_for_port(6443, 30).await;
+            let _ = tx.send("api-server ready".into());
+        }
+
+        // kubelet
+        if !is_running("kubelet") {
+            std::process::Command::new(&kubelet_bin)
+                .args(["--node-name", "pelagos-node",
+                       "--storage-backend", "sqlite",
+                       "--data-dir", data_dir,
+                       "--network", "bridge"])
+                .env("DOCKER_HOST", "unix:///var/run/pelagos-dockerd.sock")
+                .env("RUST_MIN_STACK", "8388608")
+                .stdin(std::process::Stdio::null())
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null())
+                .spawn()
+                .map_err(BackendError::Io)?;
+            let _ = tx.send("started kubelet".into());
+        }
+
+        Ok(())
+    }
+
+    async fn stop_kubernetes(&self) -> Result<(), BackendError> {
+        for name in &["kubelet", "api-server", "pelagos-dockerd"] {
+            let _ = std::process::Command::new("pkill").args(["-x", name]).status();
+        }
+        Ok(())
+    }
+}
+
+fn is_running(name: &str) -> bool {
+    std::process::Command::new("pgrep")
+        .args(["-x", name])
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false)
+}
+
+fn find_bin(name: &str, dirs: &[&str]) -> String {
+    for dir in dirs {
+        let p = format!("{}/{}", dir, name);
+        if std::path::Path::new(&p).exists() {
+            return p;
+        }
+    }
+    name.to_string()
+}
+
+async fn wait_for_port(port: u16, timeout_secs: u64) {
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(timeout_secs);
+    while tokio::time::Instant::now() < deadline {
+        if tokio::net::TcpStream::connect(format!("127.0.0.1:{port}")).await.is_ok() {
+            return;
+        }
+        tokio::time::sleep(Duration::from_millis(500)).await;
     }
 }
 

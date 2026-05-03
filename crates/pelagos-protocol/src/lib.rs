@@ -51,4 +51,4 @@ pub use types::{ContainerInfo, ContainerStatus, GuestMount, HealthStatus, ImageI
 
 /// Current protocol version.  Increment when adding new variants or fields
 /// that older guests cannot handle.  Both sides embed this in their binary.
-pub const PROTOCOL_VERSION: u32 = 2;
+pub const PROTOCOL_VERSION: u32 = 3;

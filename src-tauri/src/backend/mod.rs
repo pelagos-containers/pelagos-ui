@@ -102,4 +102,14 @@ pub trait RuntimeBackend: Send + Sync + 'static {
         follow: bool,
         tx: UnboundedSender<String>,
     ) -> Result<(), BackendError>;
+
+    /// Returns `true` if both the rusternetes api-server and kubelet are running.
+    async fn kubernetes_status(&self) -> Result<bool, BackendError>;
+
+    /// Start the rusternetes control plane (pelagos-dockerd → api-server → kubelet).
+    /// Each startup progress line is sent to `tx`.
+    async fn start_kubernetes(&self, tx: UnboundedSender<String>) -> Result<(), BackendError>;
+
+    /// Stop rusternetes (kubelet → api-server → pelagos-dockerd).
+    async fn stop_kubernetes(&self) -> Result<(), BackendError>;
 }

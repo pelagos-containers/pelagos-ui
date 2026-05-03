@@ -5,7 +5,7 @@
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
-use tauri::{Emitter, State};
+use tauri::{Emitter, Manager, State, WebviewUrl, WebviewWindowBuilder};
 
 use crate::backend::{BackendError, RuntimeBackend};
 use pelagos_protocol::{ContainerInfo, GuestMount, ImageInfo, VmStatus};
@@ -269,4 +269,73 @@ pub fn stop_logs(log_state: State<'_, LogState>, name: String) {
     if let Some(h) = log_state.0.lock().unwrap().remove(&name) {
         h.abort();
     }
+}
+
+/// Return true if rusternetes (api-server + kubelet) is running.
+///
+/// Frontend: `await invoke('kubernetes_status')`
+#[tauri::command]
+pub async fn kubernetes_status(
+    backend: State<'_, Arc<dyn RuntimeBackend>>,
+) -> Result<bool, BackendError> {
+    backend.kubernetes_status().await
+}
+
+/// Start the rusternetes control plane.  Progress lines are emitted as
+/// `kubernetes-start-log` events.
+///
+/// Frontend: `await invoke('start_kubernetes')`
+#[tauri::command]
+pub async fn start_kubernetes(
+    app: tauri::AppHandle,
+    backend: State<'_, Arc<dyn RuntimeBackend>>,
+) -> Result<(), BackendError> {
+    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<String>();
+    let backend_arc = backend.inner().clone();
+    tauri::async_runtime::spawn(async move {
+        while let Some(line) = rx.recv().await {
+            let _ = app.emit("kubernetes-start-log", line);
+        }
+    });
+    backend_arc.start_kubernetes(tx).await
+}
+
+/// Stop the rusternetes control plane.
+///
+/// Frontend: `await invoke('stop_kubernetes')`
+#[tauri::command]
+pub async fn stop_kubernetes(
+    backend: State<'_, Arc<dyn RuntimeBackend>>,
+) -> Result<(), BackendError> {
+    backend.stop_kubernetes().await
+}
+
+/// Open the rusternetes web console in a dedicated WebviewWindow.
+///
+/// The console is served by the api-server at https://192.168.106.2:6443/console/
+/// when started with --console-dir. The CA for that cert must have been added to
+/// the macOS System keychain via scripts/setup-kubernetes-tls.sh, otherwise
+/// WKWebView will refuse to load the page.
+///
+/// Frontend: `await invoke('open_console_window')`
+#[tauri::command]
+pub fn open_console_window(app: tauri::AppHandle) -> Result<(), String> {
+    const CONSOLE_URL: &str = "https://192.168.106.2:6443/console/";
+    const LABEL: &str = "kubernetes-console";
+
+    // Re-focus if the window is already open.
+    if let Some(win) = app.get_webview_window(LABEL) {
+        let _ = win.show();
+        let _ = win.set_focus();
+        return Ok(());
+    }
+
+    WebviewWindowBuilder::new(&app, LABEL, WebviewUrl::External(CONSOLE_URL.parse().unwrap()))
+        .title("Rusternetes Console")
+        .inner_size(1280.0, 800.0)
+        .min_inner_size(800.0, 600.0)
+        .resizable(true)
+        .build()
+        .map_err(|e| e.to_string())?;
+    Ok(())
 }
