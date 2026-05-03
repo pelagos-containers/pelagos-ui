@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onDestroy, onMount } from 'svelte';
   import { listen } from '@tauri-apps/api/event';
-  import { kubernetesStatus, startKubernetes, stopKubernetes } from '$lib/ipc';
+  import { kubernetesStatus, startKubernetes, stopKubernetes, openConsoleWindow } from '$lib/ipc';
 
   let running = false;
   let busy = false;
@@ -66,6 +66,11 @@
         {running ? 'Stop Kubernetes' : 'Start Kubernetes'}
       {/if}
     </button>
+    {#if running}
+      <button class="console-btn" on:click={() => openConsoleWindow()}>
+        Open Console
+      </button>
+    {/if}
   </div>
 
   {#if error}
@@ -139,6 +144,17 @@
     color: #fca5a5;
   }
   .toggle-btn.stop-btn:hover:not(:disabled) { background: #991b1b; }
+
+  .console-btn {
+    background: #1e3a5f;
+    border: 1px solid #3b82f6;
+    border-radius: 4px;
+    color: #93c5fd;
+    cursor: pointer;
+    font-size: 0.78rem;
+    padding: 5px 14px;
+  }
+  .console-btn:hover { background: #1d4ed8; color: #bfdbfe; }
 
   .k8s-error {
     font-size: 0.78rem;

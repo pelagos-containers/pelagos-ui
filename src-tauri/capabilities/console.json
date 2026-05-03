@@ -1,0 +1,9 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "console",
+  "description": "Permissions for the rusternetes web console window.",
+  "windows": ["kubernetes-console"],
+  "permissions": [
+    "core:default"
+  ]
+}

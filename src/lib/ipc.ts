@@ -50,6 +50,7 @@ export const streamLogs = (name: string, follow: boolean) =>
 export const stopLogs = (name: string) =>
   invoke<void>('stop_logs', { name });
 
-export const kubernetesStatus = () => invoke<boolean>('kubernetes_status');
-export const startKubernetes  = () => invoke<void>('start_kubernetes');
-export const stopKubernetes   = () => invoke<void>('stop_kubernetes');
+export const kubernetesStatus   = () => invoke<boolean>('kubernetes_status');
+export const startKubernetes    = () => invoke<void>('start_kubernetes');
+export const stopKubernetes     = () => invoke<void>('stop_kubernetes');
+export const openConsoleWindow  = () => invoke<void>('open_console_window');

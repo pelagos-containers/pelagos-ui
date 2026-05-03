@@ -39,6 +39,7 @@ pub fn run() {
             commands::kubernetes_status,
             commands::start_kubernetes,
             commands::stop_kubernetes,
+            commands::open_console_window,
             pty::launch_terminal_window,
             pty::launch_exec_window,
             pty::pty_start,
