@@ -158,7 +158,7 @@
 <div class="titlebar" data-tauri-drag-region>
   <span class="titlebar-title">Pelagos</span>
   <div class="titlebar-drag" data-tauri-drag-region></div>
-  <button class="tb-btn close" onclick={() => invoke('hide_main_window')} title="Close">✕</button>
+  <button class="tb-btn close" on:click={() => invoke('hide_main_window')} title="Close">✕</button>
 </div>
 {/if}
 
