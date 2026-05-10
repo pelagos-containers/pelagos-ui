@@ -40,6 +40,8 @@ pub fn run() {
             commands::start_kubernetes,
             commands::stop_kubernetes,
             commands::open_console_window,
+            commands::hide_main_window,
+            commands::get_os,
             pty::launch_terminal_window,
             pty::launch_exec_window,
             pty::pty_start,
@@ -53,6 +55,12 @@ pub fn run() {
             // Uses catppuccin-mocha colours to match Omarchy/Waybar.
             #[cfg(target_os = "linux")]
             inject_menu_css();
+
+            // On Linux, remove window decorations so the custom titlebar is used.
+            #[cfg(target_os = "linux")]
+            if let Some(win) = app.get_webview_window("main") {
+                let _ = win.set_decorations(false);
+            }
 
             let open = MenuItem::with_id(app, "open", "Open Dashboard", true, None::<&str>)?;
             let sep = PredefinedMenuItem::separator(app)?;
@@ -196,6 +204,20 @@ fn show_main_window(app: &tauri::AppHandle) {
     if let Some(win) = app.get_webview_window("main") {
         let _ = win.show();
         let _ = win.set_focus();
+    } else {
+        // Window was closed; recreate it.
+        if let Ok(win) = tauri::WebviewWindowBuilder::new(
+            app,
+            "main",
+            tauri::WebviewUrl::App("/".into()),
+        )
+        .title("pelagos")
+        .inner_size(1100.0, 700.0)
+        .min_inner_size(800.0, 500.0)
+        .build()
+        {
+            let _ = win.set_focus();
+        }
     }
 }
 
@@ -297,7 +319,7 @@ fn inject_menu_css() {
         gtk::StyleContext::add_provider_for_screen(
             &screen,
             &css,
-            gtk::STYLE_PROVIDER_PRIORITY_APPLICATION,
+            gtk::STYLE_PROVIDER_PRIORITY_USER,
         );
     }
 }

@@ -7,6 +7,7 @@
   import KubernetesPane from '$lib/components/KubernetesPane.svelte';
   import { stopContainer, removeContainer, launchExecWindow } from '$lib/ipc';
   import type { ContainerInfo } from '$lib/ipc';
+  import { invoke } from '@tauri-apps/api/core';
 
   let stopPolling: () => void;
 
@@ -34,7 +35,11 @@
   let sortCol: SortCol = 'started_at';
   let sortAsc = false; // default: newest first
 
-  onMount(() => { stopPolling = startPolling(); });
+  let os = '';
+  onMount(async () => {
+    stopPolling = startPolling();
+    os = await invoke<string>('get_os');
+  });
   onDestroy(() => stopPolling?.());
 
   async function handleStop(name: string) {
@@ -149,10 +154,17 @@
   }
 </script>
 
+{#if os === 'linux'}
+<div class="titlebar" data-tauri-drag-region>
+  <span class="titlebar-title">Pelagos</span>
+  <div class="titlebar-drag" data-tauri-drag-region></div>
+  <button class="tb-btn close" onclick={() => invoke('hide_main_window')} title="Close">✕</button>
+</div>
+{/if}
+
 <div class="app">
   <!-- ── header ──────────────────────────────────────────────────────────── -->
   <header>
-    <h1>Pelagos</h1>
     <nav class="tab-bar">
       <button class="tab-btn" class:active={activeTab === 'containers'} on:click={() => activeTab = 'containers'}>Containers</button>
       <button class="tab-btn" class:active={activeTab === 'kubernetes'} on:click={() => activeTab = 'kubernetes'}>Kubernetes</button>
@@ -293,6 +305,28 @@
     font-size: 14px;
   }
 
+  .titlebar {
+    display: flex;
+    align-items: center;
+    height: 32px;
+    padding: 0 8px 0 16px;
+    background: #0f1117;
+    border-bottom: 1px solid #1f2937;
+    user-select: none;
+    flex-shrink: 0;
+  }
+  .titlebar-title { font-size: 1.1rem; font-weight: 700; color: #f0f0f0; letter-spacing: -0.01em; }
+  .titlebar-drag  { flex: 1; height: 100%; }
+  .tb-btn {
+    width: 32px; height: 24px;
+    border: none; border-radius: 4px;
+    background: transparent; color: #f0f0f0;
+    font-size: 1rem; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    padding: 0; line-height: 1;
+  }
+  .tb-btn.close:hover { background: #c0392b; }
+
   .app    { display: flex; flex-direction: column; height: 100vh; padding: 0; overflow: hidden; }
 
   header  {
@@ -303,7 +337,6 @@
     flex-shrink: 0;
     border-bottom: 1px solid #1f2937;
   }
-  h1      { margin: 0; font-size: 1.1rem; font-weight: 700; letter-spacing: -0.01em; }
   .hint   { color: #6b7280; font-size: 0.8rem; }
   .err    { color: #f87171; font-size: 0.8rem; }
 

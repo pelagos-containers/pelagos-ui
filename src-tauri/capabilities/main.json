@@ -4,6 +4,8 @@
   "description": "Permissions for the main dashboard window.",
   "windows": ["main"],
   "permissions": [
-    "core:default"
+    "core:default",
+    "core:window:allow-destroy",
+    "core:window:allow-start-dragging"
   ]
 }

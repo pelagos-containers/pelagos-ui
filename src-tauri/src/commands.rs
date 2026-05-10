@@ -339,3 +339,21 @@ pub fn open_console_window(app: tauri::AppHandle) -> Result<(), String> {
         .map_err(|e| e.to_string())?;
     Ok(())
 }
+
+/// Close the main window (Linux custom titlebar). Systray keeps the app alive.
+///
+/// Frontend: `await invoke('hide_main_window')`
+#[tauri::command]
+pub async fn hide_main_window(app: tauri::AppHandle) {
+    if let Some(win) = app.get_webview_window("main") {
+        let _ = win.destroy();
+    }
+}
+
+/// Returns the current OS name ("linux", "macos", "windows").
+///
+/// Frontend: `await invoke('get_os')` — used to show/hide platform-specific UI.
+#[tauri::command]
+pub fn get_os() -> &'static str {
+    std::env::consts::OS
+}
