@@ -299,7 +299,7 @@
     margin: 0;
     background:
       linear-gradient(rgba(15, 17, 23, 0.80), rgba(15, 17, 23, 0.80)),
-      url('/sea-slugs.jpg') center / cover fixed;
+      url('/hagfish.jpg') center / cover fixed;
     color: #f0f0f0;
     font-family: system-ui, -apple-system, sans-serif;
     font-size: 14px;
