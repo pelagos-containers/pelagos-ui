@@ -20,7 +20,7 @@
 
     term = new Terminal({
       cursorBlink: true,
-      fontFamily: '"JetBrains Mono", "JetBrainsMono NF", "CaskaydiaMono NF", Menlo, Monaco, monospace',
+      fontFamily: '"CaskaydiaMono Nerd Font", "JetBrainsMono Nerd Font", Menlo, Monaco, monospace',
       fontSize: 13,
       theme: {
         background:          '#1e1e2e',
