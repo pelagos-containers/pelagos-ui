@@ -17,9 +17,11 @@ pub fn run() {
     env_logger::init();
 
     let backend: Arc<dyn backend::RuntimeBackend> = make_backend();
+    let k8s_backend = make_kubernetes_backend();
 
     tauri::Builder::default()
         .manage(backend)
+        .manage(k8s_backend)
         .manage(pty::PtyState::new())
         .manage(commands::LogState(std::sync::Mutex::new(
             std::collections::HashMap::new(),
@@ -198,6 +200,18 @@ fn make_backend() -> Arc<dyn backend::RuntimeBackend> {
         );
     }
     Arc::new(backend::vsock::VsockBackend::with_default_path())
+}
+
+#[cfg(target_os = "linux")]
+fn make_kubernetes_backend() -> commands::KubernetesBackend {
+    commands::KubernetesBackend(make_backend())
+}
+
+#[cfg(target_os = "macos")]
+fn make_kubernetes_backend() -> commands::KubernetesBackend {
+    commands::KubernetesBackend(Arc::new(backend::vsock::VsockBackend::new(
+        backend::vsock::build_socket_path(),
+    )))
 }
 
 fn show_main_window(app: &tauri::AppHandle) {

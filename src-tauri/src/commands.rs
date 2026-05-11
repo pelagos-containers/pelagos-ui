@@ -13,6 +13,10 @@ use pelagos_protocol::{ContainerInfo, GuestMount, ImageInfo, VmStatus};
 /// Managed state tracking active log-streaming tasks, keyed by container name.
 pub struct LogState(pub Mutex<HashMap<String, tauri::async_runtime::JoinHandle<()>>>);
 
+/// Separate backend for Kubernetes commands — connects to the build-profile VM
+/// (`profiles/build/vm.sock`) where rusternetes actually runs.
+pub struct KubernetesBackend(pub Arc<dyn RuntimeBackend>);
+
 /// Return all containers (running + exited).
 ///
 /// Frontend: `await invoke('list_containers')`
@@ -276,9 +280,9 @@ pub fn stop_logs(log_state: State<'_, LogState>, name: String) {
 /// Frontend: `await invoke('kubernetes_status')`
 #[tauri::command]
 pub async fn kubernetes_status(
-    backend: State<'_, Arc<dyn RuntimeBackend>>,
+    k8s: State<'_, KubernetesBackend>,
 ) -> Result<bool, BackendError> {
-    backend.kubernetes_status().await
+    k8s.0.kubernetes_status().await
 }
 
 /// Start the rusternetes control plane.  Progress lines are emitted as
@@ -288,10 +292,10 @@ pub async fn kubernetes_status(
 #[tauri::command]
 pub async fn start_kubernetes(
     app: tauri::AppHandle,
-    backend: State<'_, Arc<dyn RuntimeBackend>>,
+    k8s: State<'_, KubernetesBackend>,
 ) -> Result<(), BackendError> {
     let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<String>();
-    let backend_arc = backend.inner().clone();
+    let backend_arc = k8s.0.clone();
     tauri::async_runtime::spawn(async move {
         while let Some(line) = rx.recv().await {
             let _ = app.emit("kubernetes-start-log", line);
@@ -305,9 +309,9 @@ pub async fn start_kubernetes(
 /// Frontend: `await invoke('stop_kubernetes')`
 #[tauri::command]
 pub async fn stop_kubernetes(
-    backend: State<'_, Arc<dyn RuntimeBackend>>,
+    k8s: State<'_, KubernetesBackend>,
 ) -> Result<(), BackendError> {
-    backend.stop_kubernetes().await
+    k8s.0.stop_kubernetes().await
 }
 
 /// Open the rusternetes web console in a dedicated WebviewWindow.

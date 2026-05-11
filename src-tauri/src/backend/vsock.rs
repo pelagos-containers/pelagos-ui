@@ -34,6 +34,14 @@ pub fn default_socket_path() -> PathBuf {
         .join(".local/share/pelagos/vm.sock")
 }
 
+pub fn build_socket_path() -> PathBuf {
+    // pelagos-mac daemon socket for the "build" profile VM.
+    // Kubernetes (rusternetes) runs in the build VM, not the default VM.
+    dirs::home_dir()
+        .unwrap_or_else(|| PathBuf::from("/tmp"))
+        .join(".local/share/pelagos/profiles/build/vm.sock")
+}
+
 pub struct VsockBackend {
     socket_path: PathBuf,
 }
